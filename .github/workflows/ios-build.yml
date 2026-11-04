@@ -1,0 +1,32 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MonoLedger.xcodeproj \
+            -scheme MonoLedger \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
+          echo "---- 结果 ----"
+          grep -E "BUILD (SUCCEEDED|FAILED)" build.log || (echo "no verdict"; tail -60 build.log; exit 1)
