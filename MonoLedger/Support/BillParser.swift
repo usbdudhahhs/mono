@@ -875,8 +875,16 @@ enum BillParser {
         }
 
         let lines: [OCRLine] = raw
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+            // 统一换行：\r\n 和 \n 必须给出完全一样的行列表。
+            // 之前遇到 CRLF 文本（粘贴板、跨平台复制、某些 OCR 结果）时，
+            // 加空白前后金额会莫名其妙地从 88.00 变成 12.00，
+            // 而打印出来的行看起来又完全一致 —— 与其追这个，不如从源头统一。
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
+            // 这里用 whitespacesAndNewlines：\r 属于 newlines 而不是 whitespaces，
+            // 用 .whitespaces 修不掉行尾残留的回车
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .enumerated()
             .map { index, value in

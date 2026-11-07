@@ -104,8 +104,10 @@ for s in seeds {
             // 失败时把两边的「喂进解析器的行」打出来：MR 不成立要么是行不一样，
             // 要么是同样的行得出了不同结论，这两种原因的修法完全不同
             func rows(_ x: String) -> [String] {
-                x.components(separatedBy: .newlines)
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                x.replacingOccurrences(of: "\r\n", with: "\n")
+                    .replacingOccurrences(of: "\r", with: "\n")
+                    .components(separatedBy: "\n")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
             }
             let a = rows(s.text), b = rows(t)
