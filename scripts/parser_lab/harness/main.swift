@@ -127,6 +127,10 @@ for s in seeds {
                 }
             }
             print("DBG   parse(lines:) 直接调用: base=\(BillParser.parse(lines: build(a)).amount) mut=\(BillParser.parse(lines: build(b)).amount)")
+            let viaText = BillParser.parse(text: t)
+            print("DBG   text路径 evidence: \(viaText.evidence) type=\(viaText.type.rawValue) tier=\(viaText.amountTier.rawValue)")
+            let viaLines = BillParser.parse(lines: build(b))
+            print("DBG   lines路径 evidence: \(viaLines.evidence) type=\(viaLines.type.rawValue) tier=\(viaLines.amountTier.rawValue)")
             print("DBG   归一化: \(b.map { String(reflecting: BillParser.normalize($0)) })")
         }
         ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
