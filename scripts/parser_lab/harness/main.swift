@@ -99,7 +99,23 @@ for s in seeds {
     let base = BillParser.parse(text: s.text)
     func same(_ t: String, _ tag: String) {
         let m = BillParser.parse(text: t)
-        ok(abs(m.amount - base.amount) < 0.005 && m.type == base.type, "MR \(s.name)/\(tag) 得 \(m.amount)")
+        let good = abs(m.amount - base.amount) < 0.005 && m.type == base.type
+        if !good {
+            // 失败时把两边的「喂进解析器的行」打出来：MR 不成立要么是行不一样，
+            // 要么是同样的行得出了不同结论，这两种原因的修法完全不同
+            func rows(_ x: String) -> [String] {
+                x.components(separatedBy: .newlines)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .filter { !$0.isEmpty }
+            }
+            let a = rows(s.text), b = rows(t)
+            print("DBG \(s.name)/\(tag) base=\(base.amount) got=\(m.amount) 行数 \(a.count)→\(b.count) 行相同=\(a == b)")
+            if a != b {
+                print("DBG   base: \(a)")
+                print("DBG   mut : \(b)")
+            }
+        }
+        ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
     }
     same(fw(s.text), "T1全角")
     var lines = s.text.components(separatedBy: "\n")
