@@ -115,8 +115,16 @@ for s in seeds {
             print("DBG   mut行 : \(b.map { String(reflecting: $0) })")
             print("DBG   同串二次解析: \(BillParser.parse(text: t).amount)  基准二次: \(BillParser.parse(text: s.text).amount)")
             print("DBG   行拼回解析: base=\(BillParser.parse(text: a.joined(separator: "\n")).amount) mut=\(BillParser.parse(text: b.joined(separator: "\n")).amount)")
-            print("DBG   t: 字符数=\(t.count) 含CR=\(t.contains("\r")) 含TAB=\(t.contains("\t"))")
-            print("DBG   拆分后各段标量: \(t.components(separatedBy: .newlines).map { $0.unicodeScalars.map { $0.value } })")
+            print("DBG   t: 字符数=\(t.count) CR个数=\(t.unicodeScalars.filter { $0.value == 13 }.count) 换行个数=\(t.unicodeScalars.filter { $0.value == 10 }.count)")
+            // 直接用「行」构造 OCRLine 再解析，与 parse(text:) 的结果对照：
+            // 两者不一致，说明 parse(text:) 里给解析器的东西和我打印出来的行不是一回事
+            func build(_ arr: [String]) -> [OCRLine] {
+                arr.enumerated().map { i, v in
+                    OCRLine(text: v, confidence: 1, height: 0.02,
+                            box: CGRect(x: 0, y: max(0, 0.95 - CGFloat(i) * 0.04), width: 1, height: 0.02))
+                }
+            }
+            print("DBG   parse(lines:) 直接调用: base=\(BillParser.parse(lines: build(a)).amount) mut=\(BillParser.parse(lines: build(b)).amount)")
             print("DBG   归一化: \(b.map { String(reflecting: BillParser.normalize($0)) })")
         }
         ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
