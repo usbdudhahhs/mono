@@ -265,6 +265,20 @@ def main():
     #    它一旦被谁用上，测试就会在错误的词表上判定通过。这里把三处对齐。
     check_categories()
 
+    # 9) Bundle ID 一致性
+    #    App 有 Debug / Release 两套配置：CI 打真机包走 Release，跑模拟器走 Debug。
+    #    只改一处的话，两个包身份不同——装到手机上会变成两个 App，覆盖不掉旧版。
+    #    测试 target 的 ID 必须挂在 App ID 下面，否则 TEST_HOST 注入进程会失败。
+    all_ids = re.findall(r"PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);", pbx)
+    app_ids = [i for i in all_ids if not i.endswith(".tests")]
+    test_ids = [i for i in all_ids if i.endswith(".tests")]
+    if len(app_ids) != 2:
+        fail(f"PRODUCT_BUNDLE_IDENTIFIER 应有两处（Debug / Release），实际 {len(app_ids)} 处")
+    elif len(set(app_ids)) != 1:
+        fail(f"Debug 与 Release 的 Bundle ID 不一致：{' / '.join(sorted(set(app_ids)))}")
+    elif test_ids and set(test_ids) != {app_ids[0] + ".tests"}:
+        fail(f"测试 target 的 Bundle ID 应为 {app_ids[0]}.tests，实际 {' / '.join(sorted(set(test_ids)))}")
+
     # 结果
     print()
     if problems:

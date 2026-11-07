@@ -30,7 +30,7 @@ open MonoLedger.xcodeproj
 
 1. Xcode 中选中 `MonoLedger` target → **Signing & Capabilities**
 2. Team 选择你的开发者账号（免费账号也可以真机运行，7 天有效期）
-3. 如需改名，改 `PRODUCT_BUNDLE_IDENTIFIER`（当前为 `com.mono.ledger`）
+3. 如需改名，改 `PRODUCT_BUNDLE_IDENTIFIER`（当前为 `com.usbduduhaths.mono`，测试 target 对应 `com.usbduduhaths.mono.tests`）
 4. 选择模拟器或真机，⌘R
 
 首次启动是**空账本**，不会写入任何示例数据，直接开始记就行。

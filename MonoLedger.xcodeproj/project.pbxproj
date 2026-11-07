@@ -445,7 +445,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger;
+				PRODUCT_BUNDLE_IDENTIFIER = com.usbduduhaths.mono;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -478,7 +478,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 2.0.6;
-				PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger;
+				PRODUCT_BUNDLE_IDENTIFIER = com.usbduduhaths.mono;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -493,7 +493,7 @@
 					CODE_SIGN_STYLE = Automatic;
 					GENERATE_INFOPLIST_FILE = YES;
 					IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger.tests;
+					PRODUCT_BUNDLE_IDENTIFIER = com.usbduduhaths.mono.tests;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SDKROOT = iphoneos;
 					SWIFT_VERSION = 5.0;
@@ -510,7 +510,7 @@
 					CODE_SIGN_STYLE = Automatic;
 					GENERATE_INFOPLIST_FILE = YES;
 					IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-					PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger.tests;
+					PRODUCT_BUNDLE_IDENTIFIER = com.usbduduhaths.mono.tests;
 					PRODUCT_NAME = "$(TARGET_NAME)";
 					SDKROOT = iphoneos;
 					SWIFT_VERSION = 5.0;
