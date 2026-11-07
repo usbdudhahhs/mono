@@ -110,10 +110,11 @@ for s in seeds {
             }
             let a = rows(s.text), b = rows(t)
             print("DBG \(s.name)/\(tag) base=\(base.amount) got=\(m.amount) 行数 \(a.count)→\(b.count) 行相同=\(a == b)")
-            if a != b {
-                print("DBG   base: \(a)")
-                print("DBG   mut : \(b)")
-            }
+            // 用 debugDescription 打出来，\r 和 \t 才看得见
+            print("DBG   base行: \(a.map { String(reflecting: $0) })")
+            print("DBG   mut行 : \(b.map { String(reflecting: $0) })")
+            print("DBG   同串二次解析: \(BillParser.parse(text: t).amount)  基准二次: \(BillParser.parse(text: s.text).amount)")
+            print("DBG   归一化: \(b.map { String(reflecting: BillParser.normalize($0)) })")
         }
         ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
     }
