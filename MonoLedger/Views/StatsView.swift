@@ -9,7 +9,8 @@ import SwiftUI
 import SwiftData
 
 struct StatsView: View {
-    @Query(sort: [SortDescriptor(\Bill.date, order: .reverse)])
+    @Query(filter: Bill.activeFilter,
+           sort: [SortDescriptor(\Bill.date, order: .reverse)])
     private var allBills: [Bill]
 
     @State private var month: Date = Date()
@@ -26,6 +27,15 @@ struct StatsView: View {
     }
 
     private var totalDays: Int { Dates.daysInMonth(month) }
+
+    /// 已经报销回来的钱不算个人支出，统计里会被扣掉。
+    /// 不说明的话，用户看到「共 5 笔支出 ¥200」而列表加起来 500，会以为算错了
+    private var reimbursedOut: Double {
+        guard type == .expense else { return 0 }
+        return monthBills
+            .filter { $0.reimbursement == .done }
+            .reduce(0) { $0 + $1.amount }
+    }
 
     private var shownDays: Int {
         if Dates.isSameMonth(month, Date()) {
@@ -153,6 +163,13 @@ struct StatsView: View {
             }
             .font(.system(size: 11))
             .foregroundStyle(T.text3)
+
+            if reimbursedOut > 0 {
+                Text("已报销 ¥\(Fmt.money(reimbursedOut))，未计入")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(T.text3)
+                    .padding(.top, 2)
+            }
         }
     }
 

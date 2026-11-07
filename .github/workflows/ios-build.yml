@@ -1,4 +1,4 @@
-name: iOS Build
+name: Build iOS App
 
 on:
   push:
@@ -8,25 +8,130 @@ on:
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 40
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Toolchain
+      - name: 显示工具链
         run: |
           xcodebuild -version
-          xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-version
 
-      - name: Build
+      # 0) 编译前自检：工程文件漏了任何一处，都在这里说清楚，不用等五分钟才看到 xcodebuild 报错
+      - name: 工程自检
+        run: |
+          set -o pipefail
+          if [ ! -f scripts/selfcheck.py ]; then
+            echo "⚠️ 没找到 scripts/selfcheck.py（可能上传时漏了这个文件夹），跳过自检直接编译" | tee selfcheck.log
+            echo "⚠️ 没找到 scripts/selfcheck.py，已跳过自检" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 scripts/selfcheck.py | tee selfcheck.log
+          echo "### 工程自检" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat selfcheck.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # 核心逻辑回归测试：退款/报销统计、OCR/自然语言金额边界、旧备份兼容
+      # 注意：测试失败不阻断打包。目标是拿到 ipa，测试结果只作为质量信号。
+      - name: 核心逻辑 XCTest
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          DEVICE=$(xcrun simctl list devices available | awk -F'(' '/iPhone/ {gsub(/^ +| +$/,"",$1); print $1; exit}')
+          if [ -z "$DEVICE" ]; then
+            echo "## ⚠️ 没找到可用 iPhone 模拟器，跳过测试（不影响 ipa）" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "使用模拟器：$DEVICE"
+          xcodebuild test \
+            -project MonoLedger.xcodeproj \
+            -scheme MonoLedger \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=$DEVICE" \
+            -derivedDataPath build-tests \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee test-core.log | grep -E "error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+          if grep -q "TEST SUCCEEDED" test-core.log; then
+            echo "## ✅ 核心逻辑测试通过" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ⚠️ 核心逻辑测试未通过（ipa 仍会打包，请留意）" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:|failed|Failure" test-core.log | head -30 >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # 1) 免签名编译真机版本（供 SideStore / TrollStore 安装）
+      - name: 编译真机版（未签名）
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MonoLedger.xcodeproj \
+            -scheme MonoLedger \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build-device.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)|warning: .*(deprecated|unused)" || true
+          if ! grep -q "BUILD SUCCEEDED" build-device.log; then
+            echo "## ❌ 真机编译失败" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:" build-device.log | head -20 >> "$GITHUB_STEP_SUMMARY" || echo "日志里没有 error: 行" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "## ✅ 真机编译通过" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 打包成 .ipa
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then echo "❌ 没找到 .app 产物"; exit 1; fi
+          echo "产物：$APP"
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry MonoLedger-unsigned.ipa Payload
+          ls -lh MonoLedger-unsigned.ipa
+
+      # 2) 模拟器编译，确认 UI 代码本身没问题
+      - name: 编译模拟器版
         run: |
           set -o pipefail
           xcodebuild \
             -project MonoLedger.xcodeproj \
             -scheme MonoLedger \
             -configuration Debug \
-            -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build-sim \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            build 2>&1 | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)|\*\* " || true
-          echo "---- 结果 ----"
-          grep -E "BUILD (SUCCEEDED|FAILED)" build.log || (echo "no verdict"; tail -60 build.log; exit 1)
+            build 2>&1 | tee build-sim.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          if ! grep -q "BUILD SUCCEEDED" build-sim.log; then
+            echo "## ⚠️ 模拟器编译失败（ipa 已经出来了，可以先用）" >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:" build-sim.log | head -10 >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## ✅ 模拟器编译通过" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 上传 ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonoLedger-ipa
+          path: MonoLedger-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传编译日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build-device.log
+            build-sim.log
+            selfcheck.log
+            test-core.log
+          retention-days: 7

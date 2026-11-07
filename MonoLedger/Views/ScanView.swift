@@ -28,7 +28,6 @@ struct ScanView: View {
     @State private var amountText = ""
     @State private var note = ""
     @State private var categoryID = "more"
-    @State private var account = "其他"
     @State private var date = Date()
 
     @FocusState private var amountFocused: Bool
@@ -41,10 +40,22 @@ struct ScanView: View {
     private var category: Category { Catalog.find(recordType, categoryID) }
 
     private var amount: Double {
-        Double(amountText.replacingOccurrences(of: ",", with: "")) ?? 0
+        let value = Double(amountText.replacingOccurrences(of: ",", with: "")) ?? 0
+        return value.isFinite ? value : 0
     }
 
-    private var canSave: Bool { amount > 0 }
+    private var canSave: Bool { amount.isFinite && amount > 0 }
+
+    /// 页面写着「实付 ¥0.00」：积分或优惠券抵完了，不是识别失败
+    private var isZeroPaid: Bool { (result?.zeroPaid ?? false) && !canSave }
+
+    /// 识别结果本身的把握程度，还要看用户有没有亲手改过：
+    /// 改过就说明已经人工核对，不该再顶着「待核对」进账本
+    private var needsReviewOnSave: Bool {
+        guard let result, result.amountTier.needsReview else { return false }
+        let untouched = amountText == String(format: "%.2f", result.amount)
+        return untouched
+    }
 
     // MARK: - Body
 
@@ -103,11 +114,12 @@ struct ScanView: View {
                 Task { await load(item) }
             }
             .sheet(isPresented: $showCamera) {
-                CameraPicker { uiImage in
-                    Task { await recognize(uiImage) }
-                }
-                .ignoresSafeArea()
+                CameraPicker { uiImage in Task { await recognize(uiImage) } }
+                    .ignoresSafeArea()
             }
+            .alert("保存失败", isPresented: Binding(get: { errorText?.hasPrefix("保存失败：") == true }, set: { if !$0 { errorText = nil } })) {
+                Button("好", role: .cancel) { errorText = nil }
+            } message: { Text(errorText ?? "请稍后重试。") }
         }
     }
 
@@ -294,7 +306,7 @@ struct ScanView: View {
                             .focused($amountFocused)
                             .frame(minWidth: 64, maxWidth: 118)
                     }
-                    if result.confidence < 0.8 {
+                    if result.amountTier.needsReview {
                         Text("请核对")
                             .font(.system(size: 10))
                             .foregroundStyle(T.orange)
@@ -302,6 +314,35 @@ struct ScanView: View {
                 }
             }
             .padding(16)
+
+            if !result.alternatives.isEmpty {
+                RowDivider(leading: 16)
+
+                HStack(spacing: 8) {
+                    Text("也可能是")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(T.text3)
+
+                    ForEach(result.alternatives, id: \.self) { value in
+                        Button {
+                            Haptic.tap()
+                            amountText = String(format: "%.2f", value)
+                        } label: {
+                            Text("¥" + Fmt.money(value))
+                                .font(.system(size: 11.5, weight: .medium))
+                                .foregroundStyle(T.text2)
+                                .padding(.horizontal, 9)
+                                .frame(height: 26)
+                                .background(T.fill, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+            }
 
             RowDivider(leading: 16)
 
@@ -319,30 +360,6 @@ struct ScanView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
 
-            RowDivider(leading: 16)
-
-            // 账户
-            Menu {
-                ForEach(Catalog.accounts, id: \.self) { name in
-                    Button(name) { account = name }
-                }
-            } label: {
-                HStack {
-                    Text("账户")
-                        .font(.system(size: 13.5))
-                        .foregroundStyle(T.text2)
-                    Spacer()
-                    Text(account)
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundStyle(T.text)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(T.text3)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 13)
-                .contentShape(Rectangle())
-            }
         }
         .background(T.card, in: RoundedRectangle(cornerRadius: T.cardRadius, style: .continuous))
     }
@@ -378,7 +395,7 @@ struct ScanView: View {
             Button {
                 save()
             } label: {
-                Text(canSave ? "记一笔 ¥" + Fmt.money(amount) : "填个金额")
+                Text(canSave ? "记一笔 ¥" + Fmt.money(amount) : (isZeroPaid ? "实付 ¥0，无需记账" : "填个金额"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(canSave ? T.bg : T.text3)
                     .frame(maxWidth: .infinity)
@@ -420,7 +437,6 @@ struct ScanView: View {
                 amountText = String(format: "%.2f", parsed.amount)
                 note = parsed.merchant
                 categoryID = parsed.categoryID
-                account = parsed.account
                 date = parsed.date
             } else {
                 errorText = "没找到明确的金额。整页截图（含「支付成功」和金额）通常识别率最高。"
@@ -440,19 +456,24 @@ struct ScanView: View {
 
     private func save() {
         guard canSave else { return }
+        // 识别没十足把握、用户又没改过金额时，把「待核对」带进账本，
+        // 首页会一直提示到确认，避免错账悄悄混进去
         let bill = Bill(type: recordType,
                         amount: amount,
                         categoryID: categoryID,
                         note: note.trimmingCharacters(in: .whitespaces),
                         date: date,
-                        account: account,
-                        receiptData: image.flatMap { ReceiptStore.compress($0) })
+                        receiptData: image.flatMap { ReceiptStore.compress($0) },
+                        needsReview: needsReviewOnSave,
+                        alternatives: needsReviewOnSave ? (result?.alternatives ?? []) : [])
         context.insert(bill)
-        try? context.save()
-
-        Haptic.success()
-        onSaved("已记一笔 · \(category.name) ¥\(Fmt.money(amount))")
-        dismiss()
+        if let error = AppData.save(context) {
+            errorText = "保存失败：\(error)"
+        } else {
+            Haptic.success()
+            onSaved("已记一笔 · \(category.name) ¥\(Fmt.money(amount))")
+            dismiss()
+        }
     }
 }
 

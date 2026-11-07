@@ -25,7 +25,6 @@ struct MonoLedgerApp: App {
             RootView()
                 .preferredColorScheme(scheme)
                 .onAppear {
-                    SeedData.runIfNeeded(AppData.container.mainContext)
                     // 提前要一次相册权限，否则快捷指令在后台拿不到截图
                     LatestScreenshot.prepare()
                 }

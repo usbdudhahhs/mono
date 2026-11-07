@@ -166,7 +166,9 @@ struct ShortcutGuideView: View {
                 bullet("微信或支付宝付款，页面停在「支付成功」")
                 bullet("用方式一：先按侧边键 + 音量上键截个屏，再轻点两下背面")
                 bullet("用方式二：直接轻点两下背面，连截屏都省了")
-                bullet("金额、商户、分类自动填好，截图原图跟着账单存下来")
+                bullet("金额、商户、分类自动填好，截图压到长边 1200 跟着账单存下来")
+                bullet("没十足把握的金额会挂到首页顶上，点开对一眼就消掉")
+                bullet("出差垫付：在动作里打开「记为待报销」，直接进报销清单")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -277,6 +279,10 @@ struct ShortcutGuideView: View {
         4. 点动作右侧箭头，关掉「运行前询问」
         5. 命名「记账」，绑到 设置 → 辅助功能 → 触控 → 轻点背面
         之后轻点背面就是：截屏 → 识别 → 自动入账。
+
+        【报销】
+        动作参数里打开「记为待报销」，这笔会直接进「报销」清单，
+        等公司打款后在清单里点一下勾就算到账。
         """
         UIPasteboard.general.string = text
         Haptic.success()

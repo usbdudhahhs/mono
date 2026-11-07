@@ -34,7 +34,7 @@ enum ScreenshotIntentError: LocalizedError {
 struct ScreenshotBookkeepingIntent: AppIntent {
     static var title: LocalizedStringResource = "截图记账"
     static var description: IntentDescription = IntentDescription(
-        "识别截图里的金额与商户，自动分好类记一笔账，原图一并存进账单。图片只在本机处理。",
+        "识别截图里的金额与商户，自动分好类记一笔账，截图压缩后一并存进账单。图片只在本机处理。",
         categoryName: "记账",
         searchKeywords: ["记账", "截图", "识别", "账单", "OCR"]
     )
@@ -49,9 +49,13 @@ struct ScreenshotBookkeepingIntent: AppIntent {
     @Parameter(title: "立即入账", description: "关闭时只识别不记账", default: true)
     var autoSave: Bool
 
+    @Parameter(title: "记为待报销", description: "垫付的钱，等公司打款", default: false)
+    var reimburse: Bool
+
     static var parameterSummary: some ParameterSummary {
         Summary("识别 \(\.$image) 并记账") {
             \.$autoSave
+            \.$reimburse
         }
     }
 
@@ -74,32 +78,80 @@ struct ScreenshotBookkeepingIntent: AppIntent {
         }
 
         let result = try await BillParser.parse(image: uiImage)
+
+        // 积分 / 优惠券全额抵扣的单子，实付就是 0。
+        // 这种情况说「没读出金额」会让用户对着屏幕上明明白白的 ¥0.00 发懵
+        if result.zeroPaid && !result.isValid {
+            return .result(dialog: "这笔实付 ¥0.00（积分或优惠券抵扣），没有记账")
+        }
         guard result.isValid else {
             throw ScreenshotIntentError.unreadable
         }
 
         let categoryName = result.category.name
         let amountText = Fmt.money(result.amount)
+        let needsReview = result.amountTier.needsReview
 
         guard autoSave else {
-            return .result(dialog: "识别到 \(categoryName) ¥\(amountText)，未记账")
+            let hint = needsReview ? "，金额没十足把握，记之前先看一眼" : ""
+            return .result(dialog: "识别到 \(categoryName) ¥\(amountText)\(hint)，未记账")
         }
 
         let note = result.merchant.isEmpty ? categoryName : result.merchant
-        // 快捷指令传进来的截图原样留档，之后可以在账单详情里回看
+        // 截图压到长边 1200 存档：放大能看清商户和金额，一张约 100KB
         let receipt = ReceiptStore.compress(uiImage)
-        try await MainActor.run {
+        let reimbursement: ReimbursementState = (result.type == .expense && reimburse) ? .pending : .none
+
+        let outcome: (inserted: Bool, upgraded: Bool) = try await MainActor.run {
+            let context = AppData.container.mainContext
+
+            // 「轻点背面」很容易连着触发两次。同一笔账记两遍，对账时要多查半天，
+            // 所以 90 秒内出现金额、类型、备注都一样的，就当重复触发放过
+            var descriptor = FetchDescriptor<Bill>(sortBy: [SortDescriptor(\Bill.createdAt, order: .reverse)])
+            descriptor.fetchLimit = 20
+            let recent = (try? context.fetch(descriptor)) ?? []
+            let duplicate = recent.first { bill in
+                bill.type == result.type
+                    && abs(bill.amount - result.amount) < 0.005
+                    && bill.note == note
+                    && abs(Date().timeIntervalSince(bill.createdAt)) < 90
+            }
+            if let duplicate {
+                // 第二次特意说了「待报销」，说明第一笔漏标了，补上而不是再记一笔
+                if reimbursement == .pending && duplicate.reimbursement != .pending {
+                    duplicate.reimbursement = .pending
+                    _ = AppData.save(context)
+                    return (false, true)
+                }
+                return (false, false)
+            }
+
             let bill = Bill(type: result.type,
                             amount: result.amount,
                             categoryID: result.categoryID,
                             note: note,
                             date: result.date,
-                            account: result.account,
-                            receiptData: receipt)
+                            reimbursement: reimbursement,
+                            receiptData: receipt,
+                            needsReview: needsReview,
+                            alternatives: result.alternatives)
             try AppData.insert(bill)
+            return (true, false)
         }
 
-        return .result(dialog: "已记一笔 · \(categoryName) ¥\(amountText)\(note == categoryName ? "" : " · \(note)")，截图已存档")
+        if outcome.upgraded {
+            return .result(dialog: "刚记过一笔 ¥\(amountText) · \(categoryName)，已补标待报销")
+        }
+        if !outcome.inserted {
+            return .result(dialog: "刚记过一笔 ¥\(amountText) · \(categoryName)，这次没有重复记")
+        }
+
+        var parts = ["已记一笔 · \(categoryName) ¥\(amountText)"]
+        if note != categoryName { parts.append(note) }
+        if reimbursement == .pending { parts.append("待报销") }
+        if needsReview { parts.append("金额请回 MONO 核对") }
+        parts.append("截图已存档")
+        return .result(dialog: "\(parts.joined(separator: " · "))")
     }
 }
 

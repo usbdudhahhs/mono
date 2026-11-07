@@ -2,7 +2,7 @@
 //  RecordDetailView.swift
 //  MonoLedger
 //
-//  账单详情：报销、凭证、状态切换、日均推演
+//  账单详情：报销、凭证
 //
 
 import SwiftUI
@@ -17,24 +17,14 @@ struct RecordDetailView: View {
     let bill: Bill
 
     @State private var showDeleteConfirm = false
-    @State private var showResaleInput = false
-    @State private var resaleText = ""
     @State private var showReceipt = false
     @State private var showEdit = false
     @State private var showShare = false
     @State private var receiptItem: PhotosPickerItem?
+    @State private var saveError: String?
 
     init(bill: Bill) {
         self.bill = bill
-    }
-
-    private var projectionDays: [Int] {
-        [90, 180, 365, 730].filter { $0 > bill.daysUsed }
-    }
-
-    /// 只有「消费追踪」的账单才展示日均那一套
-    private var isTrackedBill: Bool {
-        bill.isTracked && bill.type == .expense
     }
 
     var body: some View {
@@ -54,12 +44,26 @@ struct RecordDetailView: View {
                             .foregroundStyle(T.text3)
                     }
 
-                    Text("¥" + Fmt.money(bill.amount))
-                        .font(.system(size: 34, weight: .semibold))
-                        .tracking(-1.2)
-                        .foregroundStyle(T.text)
-                        .monospacedDigit()
-                        .padding(.top, 2)
+                    // 金额直接可点：识别错了不用翻菜单，一下就能改
+                    Button {
+                        Haptic.tap()
+                        showEdit = true
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 7) {
+                            Text("¥" + Fmt.money(bill.amount))
+                                .font(.system(size: 34, weight: .semibold))
+                                .tracking(-1.2)
+                                .foregroundStyle(T.text)
+                                .monospacedDigit()
+
+                            Image(systemName: "pencil")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(T.text3)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
 
                     if bill.reimbursement == .done {
                         Text("已报销 · 不计入个人支出")
@@ -72,29 +76,13 @@ struct RecordDetailView: View {
                 }
                 .padding(.top, 18)
 
-                if isTrackedBill {
-                    metrics
-                        .padding(.top, 22)
-
-                    statusPills
-                        .padding(.top, 24)
-
-                    Text(bill.status.hint)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(T.text3)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 10)
+                if bill.needsReview {
+                    reviewBlock
+                        .padding(.top, 18)
                 }
 
                 if bill.type == .expense {
                     reimbursementBlock
-                        .padding(.top, isTrackedBill ? 24 : 22)
-                }
-
-                if isTrackedBill && bill.status == .active && !projectionDays.isEmpty {
-                    projectionBlock
                         .padding(.top, 22)
                 }
 
@@ -107,7 +95,7 @@ struct RecordDetailView: View {
                 Button {
                     showDeleteConfirm = true
                 } label: {
-                    Text("删除这笔账单")
+                    Text("移到回收站")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(T.red)
                         .frame(maxWidth: .infinity)
@@ -123,27 +111,19 @@ struct RecordDetailView: View {
         .scrollIndicators(.hidden)
         .background(T.bg)
         .presentationDragIndicator(.visible)
-        .confirmationDialog("删除后无法恢复",
+        .confirmationDialog("移到回收站？",
                             isPresented: $showDeleteConfirm,
                             titleVisibility: .visible) {
-            Button("删除这笔账单", role: .destructive) {
-                context.delete(bill)
-                try? context.save()
-                dismiss()
-            }
-            Button("取消", role: .cancel) {}
-        }
-        .alert("转售价格", isPresented: $showResaleInput) {
-            TextField("金额", text: $resaleText)
-                .keyboardType(.decimalPad)
-            Button("确定") {
-                let v = Double(resaleText) ?? 0
-                bill.resalePrice = max(0, (v * 100).rounded() / 100)
-                try? context.save()
+            Button("移到回收站", role: .destructive) {
+                if let error = Trash.move(bill, in: context) {
+                    saveError = error
+                } else {
+                    dismiss()
+                }
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("填 0 表示没有卖出去")
+            Text("30 天内可以在「我的 → 回收站」找回，之后自动彻底删除。")
         }
         .sheet(isPresented: $showEdit) {
             AddRecordView(editing: bill)
@@ -153,13 +133,13 @@ struct RecordDetailView: View {
             Task { await attachReceipt(item) }
         }
         .fullScreenCover(isPresented: $showReceipt) {
-            receiptViewer
-                .sheet(isPresented: $showShare) {
-                    if let img = ReceiptStore.image(from: bill.receiptData) {
-                        ShareSheet(items: [img])
-                    }
-                }
+            receiptViewer.sheet(isPresented: $showShare) {
+                if let img = ReceiptStore.image(from: bill.receiptData) { ShareSheet(items: [img]) }
+            }
         }
+        .alert("保存失败", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("好", role: .cancel) { saveError = nil }
+        } message: { Text(saveError ?? "请稍后重试。") }
     }
 
     // MARK: - 顶部
@@ -179,7 +159,7 @@ struct RecordDetailView: View {
 
             Spacer()
 
-            Text(isTrackedBill ? "消费详情" : "账单详情")
+            Text("账单详情")
                 .font(.system(size: 14.5, weight: .semibold))
                 .foregroundStyle(T.text)
 
@@ -207,77 +187,77 @@ struct RecordDetailView: View {
         .padding(.top, 14)
     }
 
-    // MARK: - 指标
+    // MARK: - 待核对
 
-    private var metrics: some View {
-        HStack(spacing: 0) {
-            metric(title: "已用天数", value: "\(bill.daysUsed)", unit: "天")
-            divider
-            metric(title: "日均成本",
-                   value: (bill.status == .refunded || bill.status == .done) ? "—" : Fmt.money1(bill.dailyCost),
-                   unit: (bill.status == .refunded || bill.status == .done) ? "" : "元")
-            divider
-            metric(title: "实际成本", value: Fmt.money0(bill.netCost), unit: "元")
-        }
-        .padding(.vertical, 14)
-        .background(T.grouped, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
+    /// 识别出两个以上候选金额时，最省事的做法是把候选摆出来让人点一下
+    private var reviewBlock: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                Text("这个金额是截图认出来的，请核对一下")
+                    .font(.system(size: 11.5, weight: .medium))
+            }
+            .foregroundStyle(T.orange)
 
-    private var divider: some View {
-        Rectangle()
-            .fill(T.line)
-            .frame(width: 0.6, height: 30)
-    }
-
-    private func metric(title: String, value: String, unit: String) -> some View {
-        VStack(spacing: 5) {
-            Text(title)
-                .font(.system(size: 10.5))
-                .foregroundStyle(T.text2)
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(value)
-                    .font(.system(size: 17, weight: .semibold))
-                    .tracking(-0.4)
-                    .foregroundStyle(T.text)
-                    .monospacedDigit()
-                if !unit.isEmpty {
-                    Text(unit)
-                        .font(.system(size: 9.5))
-                        .foregroundStyle(T.text3)
+            if !bill.reviewAlternatives.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(bill.reviewAlternatives, id: \.self) { value in
+                        Button {
+                            resolveReview(value)
+                        } label: {
+                            Text("¥" + Fmt.money(value))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(T.text)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 34)
+                                .background(T.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(T.line, lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-        }
-        .frame(maxWidth: .infinity)
-    }
 
-    // MARK: - 状态
-
-    private var statusPills: some View {
-        HStack(spacing: 6) {
-            ForEach(TrackStatus.allCases) { st in
+            HStack(spacing: 8) {
                 Button {
-                    Haptic.tap()
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        bill.status = st
-                        if st == .resold && bill.resalePrice == nil {
-                            bill.resalePrice = 0
-                        }
-                    }
-                    try? context.save()
+                    showEdit = true
                 } label: {
-                    Text(st.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(bill.status == st ? T.bg : T.text2)
+                    Text("手动改")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(T.text2)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 32)
-                        .background(
-                            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                                .fill(bill.status == st ? st.tint : T.fill)
-                        )
+                        .frame(height: 34)
+                        .background(T.bg, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    resolveReview(nil)
+                } label: {
+                    Text("金额没问题")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(T.bg)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 34)
+                        .background(T.text, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(T.orange.opacity(0.09), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    private func resolveReview(_ newAmount: Double?) {
+        Haptic.success()
+        if let newAmount { bill.amount = newAmount }
+        bill.markReviewed()
+        persistChanges()
     }
 
     // MARK: - 报销
@@ -293,7 +273,7 @@ struct RecordDetailView: View {
                         withAnimation(.easeOut(duration: 0.2)) {
                             bill.reimbursement = st
                         }
-                        try? context.save()
+                        persistChanges()
                     } label: {
                         Text(st.title)
                             .font(.system(size: 12, weight: .medium))
@@ -384,13 +364,9 @@ struct RecordDetailView: View {
             Color.black.ignoresSafeArea()
 
             if let img = ReceiptStore.image(from: bill.receiptData) {
-                ScrollView([.horizontal, .vertical]) {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                }
-                .ignoresSafeArea(edges: .bottom)
+                // 能捏合放大：报销对账时要看清商户名和订单号
+                ZoomableImage(image: img)
+                    .ignoresSafeArea(edges: .bottom)
             }
 
             VStack {
@@ -426,45 +402,22 @@ struct RecordDetailView: View {
         }
     }
 
+    @discardableResult
+    private func persistChanges() -> Bool {
+        if let error = AppData.save(context) {
+            saveError = error
+            return false
+        }
+        return true
+    }
+
     private func attachReceipt(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self),
               let image = UIImage(data: data),
               let compressed = ReceiptStore.compress(image) else { return }
         await MainActor.run {
             bill.receiptData = compressed
-            try? context.save()
-            Haptic.success()
-        }
-    }
-
-    // MARK: - 推演
-
-    private var projectionBlock: some View {
-        VStack(spacing: 7) {
-            SectionLabel(text: "如果继续用下去")
-
-            HStack(spacing: 7) {
-                ForEach(projectionDays.prefix(3), id: \.self) { d in
-                    VStack(spacing: 5) {
-                        Text("用满 \(d) 天")
-                            .font(.system(size: 10))
-                            .foregroundStyle(T.text2)
-                        HStack(alignment: .firstTextBaseline, spacing: 1) {
-                            Text("¥" + Fmt.money1(bill.netCost / Double(d)))
-                                .font(.system(size: 14, weight: .semibold))
-                                .tracking(-0.3)
-                                .foregroundStyle(T.text)
-                                .monospacedDigit()
-                            Text("/天")
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(T.text3)
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .background(T.grouped, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                }
-            }
+            if persistChanges() { Haptic.success() }
         }
     }
 
@@ -475,39 +428,7 @@ struct RecordDetailView: View {
             infoRow("购买日期", Dates.fullDate(bill.date))
             RowDivider(leading: 14)
 
-            if bill.status == .resold {
-                Button {
-                    resaleText = String(format: "%.0f", bill.resalePrice ?? 0)
-                    showResaleInput = true
-                } label: {
-                    HStack {
-                        Text("转售价格")
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(T.text2)
-                        Spacer()
-                        Text("¥" + Fmt.money(bill.resalePrice ?? 0))
-                            .font(.system(size: 13.5, weight: .medium))
-                            .foregroundStyle(T.blue)
-                            .monospacedDigit()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(T.text3)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                RowDivider(leading: 14)
-
-                infoRow("净亏损", "¥" + Fmt.money(bill.netCost))
-                RowDivider(leading: 14)
-            }
-
             infoRow("分类", bill.category.name)
-            RowDivider(leading: 14)
-
-            infoRow("支付账户", bill.account)
 
             if bill.type == .expense && bill.reimbursement != .none {
                 RowDivider(leading: 14)

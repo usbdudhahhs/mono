@@ -12,16 +12,18 @@ struct ReimburseListView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @Query(sort: [SortDescriptor(\Bill.date, order: .reverse)])
+    @Query(filter: Bill.activeFilter,
+           sort: [SortDescriptor(\Bill.date, order: .reverse)])
     private var allBills: [Bill]
 
     @State private var selected: Bill?
     @State private var toastText: String?
+    @State private var showSettleConfirm = false
 
     // MARK: - 数据
 
     private var pending: [Bill] {
-        allBills.filter { $0.type == .expense && $0.reimbursement == .pending }
+        allBills.filter { $0.isPendingReimbursement }
     }
 
     private var done: [Bill] {
@@ -67,6 +69,14 @@ struct ReimburseListView: View {
             }
         }
         .toast($toastText)
+        .confirmationDialog("把这 \(pending.count) 笔全部标记为已报销？",
+                            isPresented: $showSettleConfirm,
+                            titleVisibility: .visible) {
+            Button("全部标记到账", role: .destructive) { settleAll() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("标记后这些钱会从本月支出里扣除。要反悔，逐笔点左边的箭头改回待报销即可。")
+        }
         .sheet(item: $selected) { bill in
             RecordDetailView(bill: bill)
         }
@@ -118,7 +128,7 @@ struct ReimburseListView: View {
 
             if pending.count > 1 {
                 Button {
-                    settleAll()
+                    showSettleConfirm = true
                 } label: {
                     Text("全部标记到账")
                         .font(.system(size: 12.5, weight: .medium))
@@ -144,9 +154,9 @@ struct ReimburseListView: View {
             SectionLabel(text: title)
 
             GroupCard {
-                ForEach(Array(bills.indices), id: \.self) { i in
-                    row(bills[i], isPending: isPending)
-                    if i < bills.count - 1 {
+                ForEach(bills) { bill in
+                    row(bill, isPending: isPending)
+                    if bill.persistentModelID != bills.last?.persistentModelID {
                         RowDivider()
                     }
                 }
@@ -174,7 +184,7 @@ struct ReimburseListView: View {
                                     .foregroundStyle(T.text3)
                             }
                         }
-                        Text("\(Dates.shortDate(bill.date)) · \(bill.account)")
+                        Text(Dates.shortDate(bill.date))
                             .font(.system(size: 11))
                             .foregroundStyle(T.text3)
                     }
@@ -213,8 +223,11 @@ struct ReimburseListView: View {
         withAnimation(.easeOut(duration: 0.2)) {
             bill.reimbursement = toPending ? .pending : .done
         }
-        try? context.save()
-        showToast(toPending ? "已退回待报销" : "已标记到账")
+        if let error = AppData.save(context) {
+            showToast("保存失败：\(error)")
+        } else {
+            showToast(toPending ? "已退回待报销" : "已标记到账")
+        }
     }
 
     private func settleAll() {
@@ -222,8 +235,11 @@ struct ReimburseListView: View {
         withAnimation(.easeOut(duration: 0.25)) {
             for bill in pending { bill.reimbursement = .done }
         }
-        try? context.save()
-        showToast("已全部标记到账")
+        if let error = AppData.save(context) {
+            showToast("保存失败：\(error)")
+        } else {
+            showToast("已全部标记到账")
+        }
     }
 
     private func showToast(_ text: String) {

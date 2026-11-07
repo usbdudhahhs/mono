@@ -26,22 +26,6 @@ struct CategoryBadge: View {
     }
 }
 
-// MARK: - 追踪徽标
-
-struct TrackBadge: View {
-    let status: TrackStatus
-    var days: Int = 0
-
-    var body: some View {
-        Text(status.shortLabel(days: days))
-            .font(.system(size: 9.5, weight: .semibold))
-            .foregroundStyle(status.tint)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
-            .background(status.tint.opacity(0.13), in: Capsule())
-    }
-}
-
 // MARK: - 分段控件
 
 struct SegmentedBar<Value: Hashable>: View {
@@ -207,5 +191,82 @@ enum Haptic {
     static func success() {
         let g = UINotificationFeedbackGenerator()
         g.notificationOccurred(.success)
+    }
+}
+
+// MARK: - 可缩放大图
+
+/// 凭证图查看器：双指放大、拖动、双击复位。
+///
+/// 截图压到长边 1200 后，在手机屏上按宽度铺满只剩三百多点，
+/// 报销对账时要看清商户名和订单号必须能放大 —— 只给 ScrollView 是不够的。
+struct ZoomableImage: View {
+    let image: UIImage
+    var maxScale: CGFloat = 4
+
+    @State private var scale: CGFloat = 1
+    @State private var baseScale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var baseOffset: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geo in
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: geo.size.width, height: geo.size.height)
+                .scaleEffect(scale)
+                .offset(offset)
+                .gesture(magnify)
+                .simultaneousGesture(drag(in: geo.size), including: scale > 1 ? .all : .none)
+                .onTapGesture(count: 2) { toggleZoom() }
+        }
+        .clipped()
+    }
+
+    private var magnify: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                scale = min(maxScale, max(1, baseScale * value.magnification))
+            }
+            .onEnded { _ in
+                baseScale = scale
+                if scale <= 1.01 { reset() }
+            }
+    }
+
+    /// 放大后拖动，但不能把图拖出屏幕外 —— 拖飞了只能双击复位，很难受
+    private func drag(in size: CGSize) -> some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard scale > 1 else { return }
+                let limitX = size.width * (scale - 1) / 2
+                let limitY = size.height * (scale - 1) / 2
+                offset = CGSize(
+                    width: min(limitX, max(-limitX, baseOffset.width + value.translation.width)),
+                    height: min(limitY, max(-limitY, baseOffset.height + value.translation.height))
+                )
+            }
+            .onEnded { _ in baseOffset = offset }
+    }
+
+    private func toggleZoom() {
+        if scale > 1.01 {
+            reset()
+        } else {
+            withAnimation(.easeOut(duration: 0.22)) {
+                scale = 2.4
+                baseScale = 2.4
+            }
+        }
+    }
+
+    private func reset() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            scale = 1
+            baseScale = 1
+            offset = .zero
+            baseOffset = .zero
+        }
     }
 }

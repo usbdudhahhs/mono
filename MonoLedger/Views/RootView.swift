@@ -2,7 +2,7 @@
 //  RootView.swift
 //  MonoLedger
 //
-//  主框架：三个页面 + 消费追踪 + 中间凸起记账按钮
+//  主框架：账单、统计、我的 + 中间凸起记账按钮
 //
 
 import SwiftUI
@@ -10,13 +10,15 @@ import SwiftUI
 enum RootTab: Hashable {
     case bills
     case stats
-    case track
     case me
 }
 
 struct RootView: View {
+    @Environment(\.modelContext) private var context
+
     @State private var tab: RootTab = .bills
     @State private var showAdd = false
+    @State private var saveFailureMessage: String?
 
     var body: some View {
         ZStack {
@@ -28,8 +30,6 @@ struct RootView: View {
                     BillsView()
                 case .stats:
                     StatsView()
-                case .track:
-                    NavigationStack { TrackListView() }
                 case .me:
                     NavigationStack { MeView() }
                 }
@@ -46,6 +46,25 @@ struct RootView: View {
             AddRecordView()
         }
         .tint(T.text)
+        .onReceive(NotificationCenter.default.publisher(for: .monoSaveFailed)) { notification in
+            saveFailureMessage = notification.userInfo?["message"] as? String ?? "请检查设备存储空间后重试。"
+        }
+        .onAppear {
+            // 回收站到期清理，启动时做一次就够，不用等用户点进去
+            Trash.purgeExpired(context)
+
+            if saveFailureMessage == nil, let warning = AppData.storageWarning {
+                saveFailureMessage = warning
+            }
+        }
+        .alert("MONO 提示", isPresented: Binding(
+            get: { saveFailureMessage != nil },
+            set: { if !$0 { saveFailureMessage = nil } }
+        )) {
+            Button("知道了", role: .cancel) { saveFailureMessage = nil }
+        } message: {
+            Text(saveFailureMessage ?? "账单未能保存，请重试。")
+        }
     }
 }
 
@@ -60,7 +79,6 @@ struct MainTabBar: View {
             item(.bills, "账单", "list.bullet.rectangle", "list.bullet.rectangle.fill")
             item(.stats, "统计", "chart.bar", "chart.bar.fill")
             addButton
-            item(.track, "追踪", "clock.arrow.circlepath", "clock.arrow.circlepath")
             item(.me, "我的", "person", "person.fill")
         }
         .padding(.top, 9)

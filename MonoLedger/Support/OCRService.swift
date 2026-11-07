@@ -47,8 +47,9 @@ enum OCRError: LocalizedError {
 enum OCRService {
     /// 识别图片中的文字，按从上到下的顺序返回
     static func recognize(_ image: UIImage) async throws -> [OCRLine] {
-        guard let cgImage = prepare(image) else { throw OCRError.invalidImage }
-        let orientation = CGImagePropertyOrientation(image.imageOrientation)
+        guard let prepared = prepare(image) else { throw OCRError.invalidImage }
+        let cgImage = prepared.cgImage
+        let orientation = prepared.orientation
 
         let lines: [OCRLine] = try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
@@ -87,23 +88,42 @@ enum OCRService {
         return lines.sorted { $0.box.midY > $1.box.midY }
     }
 
-    /// 缩到合理尺寸再识别：太大拖慢速度，太小丢字
-    private static func prepare(_ image: UIImage, maxDimension: CGFloat = 2400) -> CGImage? {
-        let size = image.size
-        guard size.width > 1, size.height > 1 else { return nil }
+    /// 预处理结果：像素 + 该像素对应的方向
+    private struct Prepared {
+        let cgImage: CGImage
+        let orientation: CGImagePropertyOrientation
+    }
 
-        let longest = max(size.width, size.height)
-        guard longest > maxDimension else { return image.cgImage }
+    /// 缩到合理尺寸再识别：太大拖慢速度，太小丢字
+    ///
+    /// 方向必须跟着像素一起返回：缩放用的 `UIImage.draw(in:)` 会把方向烘焙进像素，
+    /// 此时再拿原图的 orientation 交给 Vision，就会二次旋转，竖拍 / 横拍的照片整页侧躺。
+    /// 未缩放时像素仍是原始朝向，才需要用原图的方向信息。
+    private static func prepare(_ image: UIImage, maxDimension: CGFloat = 2400) -> Prepared? {
+        guard let source = image.cgImage,
+              source.width > 1, source.height > 1 else { return nil }
+
+        // 画布尺寸要按「摆正后」的宽高算。竖拍的照片 cgImage 是横的（4032×3024），
+        // 直接拿它建横画布再 draw，会把竖图压扁，字全挤在一起，识别率直线下降
+        let pixelSize = ReceiptStore.pixelSize(of: image)
+        let longest = max(pixelSize.width, pixelSize.height)
+
+        guard longest > maxDimension else {
+            return Prepared(cgImage: source,
+                            orientation: CGImagePropertyOrientation(image.imageOrientation))
+        }
 
         let scale = maxDimension / longest
-        let target = CGSize(width: size.width * scale, height: size.height * scale)
+        let target = CGSize(width: max(1, (pixelSize.width * scale).rounded()),
+                            height: max(1, (pixelSize.height * scale).rounded()))
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         let renderer = UIGraphicsImageRenderer(size: target, format: format)
         let resized = renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: target))
         }
-        return resized.cgImage
+        guard let cgImage = resized.cgImage else { return nil }
+        return Prepared(cgImage: cgImage, orientation: .up)
     }
 }
 

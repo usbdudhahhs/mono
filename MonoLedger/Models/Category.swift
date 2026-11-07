@@ -34,6 +34,7 @@ enum Catalog {
         Category(id: "salary",  name: "工资", symbol: "yensign.circle.fill",     colorHex: "#30D158"),
         Category(id: "bonus",   name: "奖金", symbol: "star.fill",               colorHex: "#FFD60A"),
         Category(id: "invest",  name: "理财", symbol: "chart.line.uptrend.xyaxis", colorHex: "#0A84FF"),
+        Category(id: "part",    name: "兼职", symbol: "briefcase.fill",        colorHex: "#5E5CE6"),
         Category(id: "red",     name: "红包", symbol: "gift.fill",               colorHex: "#FF375F"),
         Category(id: "refund",  name: "退款", symbol: "arrow.uturn.backward.circle.fill", colorHex: "#64D2FF"),
         Category(id: "claim",   name: "报销", symbol: "creditcard.fill",         colorHex: "#32ADE6"),
@@ -54,5 +55,4 @@ enum Catalog {
         find(type, id).name
     }
 
-    static var accounts: [String] { ["微信", "支付宝", "储蓄卡", "信用卡", "现金"] }
 }

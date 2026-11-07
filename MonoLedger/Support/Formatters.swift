@@ -8,50 +8,50 @@
 import Foundation
 
 enum Fmt {
-    private static let twoDecimals: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.minimumFractionDigits = 2
-        f.maximumFractionDigits = 2
-        f.groupingSeparator = ","
-        f.usesGroupingSeparator = true
-        return f
-    }()
+    /// 千分位分组。
+    ///
+    /// 这里不用 `NumberFormatter`：它是引用类型且不是线程安全的，
+    /// 放成 static let 之后，快捷指令在后台线程解析账单时和主线程同时读，
+    /// 轻则格式化出错字，重则直接崩。金额显示错一位，对账就全废了 ——
+    /// 手写这点逻辑反而更稳、也更快。
+    private static func grouped(_ digits: String) -> String {
+        var out = ""
+        var count = 0
+        for ch in digits.reversed() {
+            if count == 3 { out.append(","); count = 0 }
+            out.append(ch)
+            count += 1
+        }
+        return String(out.reversed())
+    }
 
-    private static let noDecimals: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.minimumFractionDigits = 0
-        f.maximumFractionDigits = 0
-        f.groupingSeparator = ","
-        f.usesGroupingSeparator = true
-        return f
-    }()
-
-    private static let oneDecimal: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.minimumFractionDigits = 1
-        f.maximumFractionDigits = 1
-        f.groupingSeparator = ","
-        f.usesGroupingSeparator = true
-        return f
-    }()
+    private static func fixed(_ value: Double, decimals: Int) -> String {
+        guard value.isFinite else { return decimals == 0 ? "0" : "0." + String(repeating: "0", count: decimals) }
+        let unit = pow(10.0, Double(decimals))
+        let scaled = (abs(value) * unit).rounded()
+        // 四舍五入到 0 就别留负号：-0.00 看着像账目算错了
+        let sign = (value < 0 && scaled > 0) ? "-" : ""
+        // 超过 9 万亿就不用细算了，避免整数溢出
+        guard scaled < 9_000_000_000_000 else {
+            return sign + grouped(String(Int(scaled / unit)))
+        }
+        let total = Int(scaled)
+        let divisor = Int(unit)
+        let whole = total / divisor
+        guard decimals > 0 else { return sign + grouped(String(whole)) }
+        let fraction = total % divisor
+        let text = String(format: "%0\(decimals)d", fraction)
+        return sign + grouped(String(whole)) + "." + text
+    }
 
     /// 12,345.60
-    static func money(_ value: Double) -> String {
-        twoDecimals.string(from: NSNumber(value: value)) ?? "0.00"
-    }
+    static func money(_ value: Double) -> String { fixed(value, decimals: 2) }
 
     /// 12,346
-    static func money0(_ value: Double) -> String {
-        noDecimals.string(from: NSNumber(value: value)) ?? "0"
-    }
+    static func money0(_ value: Double) -> String { fixed(value, decimals: 0) }
 
     /// 12.3
-    static func money1(_ value: Double) -> String {
-        oneDecimal.string(from: NSNumber(value: value)) ?? "0.0"
-    }
+    static func money1(_ value: Double) -> String { fixed(value, decimals: 1) }
 
     /// 输入框中的实时数字：保留原始文本感觉
     static func fromInput(_ text: String) -> Double {

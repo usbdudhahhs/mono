@@ -12,7 +12,6 @@
 		D32C7CB9DB582914A5310F4A /* ScreenshotIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77540231833F454BED4405C7 /* ScreenshotIntent.swift */; };
 		0D3B5372DFC2DA81F5EDC683 /* Bill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F5826F85EEB2119B068FCC3 /* Bill.swift */; };
 		B8E9161500D50FBF5183513B /* Category.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF44DC2FEA588869D20182E /* Category.swift */; };
-		CC4A3F9123BFBF2721DABEC2 /* SeedData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3680937F25F3E0CDAA1322BF /* SeedData.swift */; };
 		FAB650AB64F85327A6A514A4 /* AppData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24A4032C60EEDC010B53CE36 /* AppData.swift */; };
 		977C28F403C6808903114F00 /* BillParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 935ED1B5D312F4A4B68D3BDE /* BillParser.swift */; };
 		6454C7CA027F3CCA811A7B0A /* Formatters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5222F9D2426FDC080CAEC24D /* Formatters.swift */; };
@@ -28,10 +27,16 @@
 		7F1D5CD4A4B3C17587FD1544 /* ReimburseListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D2F8E40C5383A0E26965108 /* ReimburseListView.swift */; };
 		162D836C7C50E6AD190F4643 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7657EE23CC8EEB739B6ECF6F /* RootView.swift */; };
 		44ABF9E772CE81371DFDDB1A /* ScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50929CE8B3CEC3DDE16646CA /* ScanView.swift */; };
+		41C035F4D3E95E89072B96A0 /* TextRecordSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1839112399E7A723B4C0927B /* TextRecordSheet.swift */; };
+		2BD1FA6D7D7D7147C93216B6 /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41BB2A51FB98F8C1BB3AC8AC /* BackupService.swift */; };
 		EA4E442EB25D7DC30022E286 /* ShortcutGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5B90094F4D3384078AE4919 /* ShortcutGuideView.swift */; };
 		08FBD148243C4AE97A41D6DC /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122663AB0F462BCD4CDA4E4F /* StatsView.swift */; };
-		EEF68FAFAAE6DCD3EA057EAC /* TrackListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36CFD65C84A0B238EEC610AF /* TrackListView.swift */; };
 		A6070B9CF28E71610AA267AE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 59DAA59D477A91E75E0468AF /* Assets.xcassets */; };
+		A11111111111111111111111 /* MonoLedgerCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222222 /* MonoLedgerCoreTests.swift */; };
+		A33333333333333333333333 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A44444444444444444444444 /* XCTest.framework */; };
+		F79AFE73600838DA69D34034 /* TrashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39C82F8154820109CE2B76D3 /* TrashView.swift */; };
+		67FFE3BA390840DFE810BF16 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5EFB59DCAFDFA46C9041BD /* SearchView.swift */; };
+		4176DCA6BB1957F65C75B8BE /* AttachmentGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 071706472FF7B5418C31E53A /* AttachmentGalleryView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +47,6 @@
 		77540231833F454BED4405C7 /* ScreenshotIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotIntent.swift; sourceTree = "<group>"; };
 		5F5826F85EEB2119B068FCC3 /* Bill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Bill.swift; sourceTree = "<group>"; };
 		8EF44DC2FEA588869D20182E /* Category.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Category.swift; sourceTree = "<group>"; };
-		3680937F25F3E0CDAA1322BF /* SeedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedData.swift; sourceTree = "<group>"; };
 		24A4032C60EEDC010B53CE36 /* AppData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppData.swift; sourceTree = "<group>"; };
 		935ED1B5D312F4A4B68D3BDE /* BillParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillParser.swift; sourceTree = "<group>"; };
 		5222F9D2426FDC080CAEC24D /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
@@ -58,9 +62,16 @@
 		4D2F8E40C5383A0E26965108 /* ReimburseListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReimburseListView.swift; sourceTree = "<group>"; };
 		7657EE23CC8EEB739B6ECF6F /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		50929CE8B3CEC3DDE16646CA /* ScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanView.swift; sourceTree = "<group>"; };
+		1839112399E7A723B4C0927B /* TextRecordSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextRecordSheet.swift; sourceTree = "<group>"; };
+		41BB2A51FB98F8C1BB3AC8AC /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		C5B90094F4D3384078AE4919 /* ShortcutGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutGuideView.swift; sourceTree = "<group>"; };
 		122663AB0F462BCD4CDA4E4F /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
-		36CFD65C84A0B238EEC610AF /* TrackListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackListView.swift; sourceTree = "<group>"; };
+		A22222222222222222222222 /* MonoLedgerCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonoLedgerCoreTests.swift; sourceTree = "<group>"; };
+		A55555555555555555555555 /* MonoLedgerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonoLedgerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A44444444444444444444444 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+		39C82F8154820109CE2B76D3 /* TrashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrashView.swift; sourceTree = "<group>"; };
+		AB5EFB59DCAFDFA46C9041BD /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		071706472FF7B5418C31E53A /* AttachmentGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentGalleryView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +82,12 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A66666666666666666666666 /* MonoLedgerTests Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (A33333333333333333333333 /* XCTest.framework in Frameworks */,);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -79,6 +96,7 @@
 			children = (
 				6A570FF2C5420465B0A9EA76 /* MonoLedger */,
 				B23D89B2D2DF3745A003AEB1 /* Products */,
+				A77777777777777777777777 /* MonoLedgerTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -125,7 +143,6 @@
 			children = (
 				5F5826F85EEB2119B068FCC3 /* Bill.swift */,
 				8EF44DC2FEA588869D20182E /* Category.swift */,
-				3680937F25F3E0CDAA1322BF /* SeedData.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -140,6 +157,7 @@
 				06E33DD9AA41B7953626D249 /* MerchantRules.swift */,
 				22DE3BA4007DD8C42E3766BF /* OCRService.swift */,
 				5425753094F55CEF29FD2E17 /* ReceiptStore.swift */,
+				41BB2A51FB98F8C1BB3AC8AC /* BackupService.swift */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -152,20 +170,30 @@
 				BCB3AFD00E7B846296B5A79A /* Components.swift */,
 				0427A3FFEAE682B9AF460A4A /* MeView.swift */,
 				3C3950832598BF5ADE617C85 /* RecordDetailView.swift */,
+				071706472FF7B5418C31E53A /* AttachmentGalleryView.swift */,
+				AB5EFB59DCAFDFA46C9041BD /* SearchView.swift */,
+				39C82F8154820109CE2B76D3 /* TrashView.swift */,
 				4D2F8E40C5383A0E26965108 /* ReimburseListView.swift */,
 				7657EE23CC8EEB739B6ECF6F /* RootView.swift */,
 				50929CE8B3CEC3DDE16646CA /* ScanView.swift */,
+				1839112399E7A723B4C0927B /* TextRecordSheet.swift */,
 				C5B90094F4D3384078AE4919 /* ShortcutGuideView.swift */,
 				122663AB0F462BCD4CDA4E4F /* StatsView.swift */,
-				36CFD65C84A0B238EEC610AF /* TrackListView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		A77777777777777777777777 /* MonoLedgerTests */ = {
+			isa = PBXGroup;
+			children = (A22222222222222222222222 /* MonoLedgerCoreTests.swift */,);
+			path = MonoLedgerTests;
 			sourceTree = "<group>";
 		};
 		B23D89B2D2DF3745A003AEB1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				EF0182DF85A7CD0319333F24 /* MonoLedger.app */,
+				A55555555555555555555555 /* MonoLedgerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -190,6 +218,21 @@
 			productReference = EF0182DF85A7CD0319333F24 /* MonoLedger.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A88888888888888888888888 /* MonoLedgerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A99999999999999999999999 /* Build configuration list for PBXNativeTarget "MonoLedgerTests" */;
+			buildPhases = (
+				AB1111111111111111111111 /* MonoLedgerTests Sources */,
+				A66666666666666666666666 /* MonoLedgerTests Frameworks */,
+				AB2222222222222222222222 /* MonoLedgerTests Resources */,
+			);
+			buildRules = ();
+			dependencies = (AB3333333333333333333333 /* PBXTargetDependency */,);
+			name = MonoLedgerTests;
+			productName = MonoLedgerTests;
+			productReference = A55555555555555555555555 /* MonoLedgerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -202,6 +245,10 @@
 				TargetAttributes = {
 					42AEFBAE01D2DFD981F7DA7D = {
 						CreatedOnToolsVersion = 16.0;
+					};
+					A88888888888888888888888 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = 42AEFBAE01D2DFD981F7DA7D;
 					};
 				};
 			};
@@ -220,7 +267,20 @@
 			projectRoot = "";
 			targets = (
 				42AEFBAE01D2DFD981F7DA7D /* MonoLedger */,
+				A88888888888888888888888 /* MonoLedgerTests */,
 			);
+		};
+		AB4444444444444444444444 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 46F86FAA6BBF9AC94A7E4595 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 42AEFBAE01D2DFD981F7DA7D;
+			remoteInfo = MonoLedger;
+		};
+		AB3333333333333333333333 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 42AEFBAE01D2DFD981F7DA7D /* MonoLedger */;
+			targetProxy = AB4444444444444444444444 /* PBXContainerItemProxy */;
 		};
 /* End PBXProject section */
 
@@ -245,7 +305,6 @@
 				D32C7CB9DB582914A5310F4A /* ScreenshotIntent.swift in Sources */,
 				0D3B5372DFC2DA81F5EDC683 /* Bill.swift in Sources */,
 				B8E9161500D50FBF5183513B /* Category.swift in Sources */,
-				CC4A3F9123BFBF2721DABEC2 /* SeedData.swift in Sources */,
 				FAB650AB64F85327A6A514A4 /* AppData.swift in Sources */,
 				977C28F403C6808903114F00 /* BillParser.swift in Sources */,
 				6454C7CA027F3CCA811A7B0A /* Formatters.swift in Sources */,
@@ -253,20 +312,36 @@
 				6162459C722BCC51A0434646 /* MerchantRules.swift in Sources */,
 				DEFAB0C04B7FB449E45871AC /* OCRService.swift in Sources */,
 				BEE57BA2E3569AAB9D865F10 /* ReceiptStore.swift in Sources */,
+				2BD1FA6D7D7D7147C93216B6 /* BackupService.swift in Sources */,
 				EBA0A1FE0EB930A98768EB54 /* AddRecordView.swift in Sources */,
 				9E8C8C17570CC79A4B2D0653 /* BillsView.swift in Sources */,
 				C1E4FD6A1C33DFA0CAAC5501 /* Components.swift in Sources */,
 				0F033A7B208A789662103E37 /* MeView.swift in Sources */,
 				E9F25A0DB34333AC0DA34BF5 /* RecordDetailView.swift in Sources */,
+				4176DCA6BB1957F65C75B8BE /* AttachmentGalleryView.swift in Sources */,
+				67FFE3BA390840DFE810BF16 /* SearchView.swift in Sources */,
+				F79AFE73600838DA69D34034 /* TrashView.swift in Sources */,
 				7F1D5CD4A4B3C17587FD1544 /* ReimburseListView.swift in Sources */,
 				162D836C7C50E6AD190F4643 /* RootView.swift in Sources */,
 				44ABF9E772CE81371DFDDB1A /* ScanView.swift in Sources */,
+				41C035F4D3E95E89072B96A0 /* TextRecordSheet.swift in Sources */,
 				EA4E442EB25D7DC30022E286 /* ShortcutGuideView.swift in Sources */,
 				08FBD148243C4AE97A41D6DC /* StatsView.swift in Sources */,
-				EEF68FAFAAE6DCD3EA057EAC /* TrackListView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+			AB1111111111111111111111 /* MonoLedgerTests Sources */ = {
+				isa = PBXSourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = (A11111111111111111111111 /* MonoLedgerCoreTests.swift in Sources */,);
+				runOnlyForDeploymentPostprocessing = 0;
+			};
+			AB2222222222222222222222 /* MonoLedgerTests Resources */ = {
+				isa = PBXResourcesBuildPhase;
+				buildActionMask = 2147483647;
+				files = ();
+				runOnlyForDeploymentPostprocessing = 0;
+			};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
@@ -351,7 +426,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 17;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MONO;
@@ -369,7 +444,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -384,7 +459,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 17;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = MONO;
@@ -402,7 +477,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 2.0.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -411,6 +486,40 @@
 			};
 			name = Release;
 		};
+			AC1111111111111111111111 /* Debug */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
+					CODE_SIGN_STYLE = Automatic;
+					GENERATE_INFOPLIST_FILE = YES;
+					IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SDKROOT = iphoneos;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonoLedger.app/MonoLedger";
+					TEST_TARGET_NAME = MonoLedger;
+				};
+				name = Debug;
+			};
+			AC2222222222222222222222 /* Release */ = {
+				isa = XCBuildConfiguration;
+				buildSettings = {
+					BUNDLE_LOADER = "$(TEST_HOST)";
+					CODE_SIGN_STYLE = Automatic;
+					GENERATE_INFOPLIST_FILE = YES;
+					IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+					PRODUCT_BUNDLE_IDENTIFIER = com.mono.ledger.tests;
+					PRODUCT_NAME = "$(TARGET_NAME)";
+					SDKROOT = iphoneos;
+					SWIFT_VERSION = 5.0;
+					TARGETED_DEVICE_FAMILY = "1,2";
+					TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MonoLedger.app/MonoLedger";
+					TEST_TARGET_NAME = MonoLedger;
+				};
+				name = Release;
+			};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -432,6 +541,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+			A99999999999999999999999 /* Build configuration list for PBXNativeTarget "MonoLedgerTests" */ = {
+				isa = XCConfigurationList;
+				buildConfigurations = (
+					AC1111111111111111111111 /* Debug */,
+					AC2222222222222222222222 /* Release */,
+				);
+				defaultConfigurationIsVisible = 0;
+				defaultConfigurationName = Release;
+			};
 /* End XCConfigurationList section */
 
 	};

@@ -11,7 +11,8 @@ import SwiftData
 struct BillsView: View {
     @Environment(\.modelContext) private var context
 
-    @Query(sort: [SortDescriptor(\Bill.date, order: .reverse),
+    @Query(filter: Bill.activeFilter,
+           sort: [SortDescriptor(\Bill.date, order: .reverse),
                   SortDescriptor(\Bill.createdAt, order: .reverse)])
     private var allBills: [Bill]
 
@@ -20,6 +21,7 @@ struct BillsView: View {
     @State private var month: Date = Date()
     @State private var sheet: BillsSheet?
     @State private var toastText: String?
+    @State private var saveError: String?
 
     // MARK: - 计算
 
@@ -33,7 +35,7 @@ struct BillsView: View {
 
     /// 已垫付、还没报销回来的钱
     private var pendingReimbursement: Double {
-        monthBills.filter { $0.type == .expense && $0.reimbursement == .pending }
+        monthBills.filter { $0.isPendingReimbursement }
             .reduce(0) { $0 + $1.amount }
     }
 
@@ -48,6 +50,12 @@ struct BillsView: View {
     }
 
     private var balance: Double { totalIncome - totalExpense }
+
+    /// 截图识别出来、还没被人眼确认过的账单。
+    /// 这是「识别错了也不会错账」的兜底：错的会被一直顶在首页最上面。
+    private var reviewBills: [Bill] {
+        allBills.filter { $0.needsReview }
+    }
 
     private var groups: [(day: Date, items: [Bill])] {
         let dict = Dictionary(grouping: monthBills) {
@@ -69,6 +77,10 @@ struct BillsView: View {
                 hero
                     .padding(.top, 26)
 
+                if !reviewBills.isEmpty {
+                    reviewBanner
+                }
+
                 if budget > 0 {
                     budgetBlock
                         .padding(.top, 22)
@@ -83,6 +95,9 @@ struct BillsView: View {
         .scrollIndicators(.hidden)
         .background(T.bg)
         .toast($toastText)
+        .alert("操作未保存", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("好", role: .cancel) { saveError = nil }
+        } message: { Text(saveError ?? "请稍后重试。") }
         .sheet(item: $sheet) { route in
             switch route {
             case .add(let bill):
@@ -95,6 +110,13 @@ struct BillsView: View {
                 RecordDetailView(bill: bill)
             case .scan:
                 ScanView { message in showToast(message) }
+            case .text:
+                TextRecordSheet(allowsDirectSave: true,
+                                onSaved: { message in showToast(message) })
+            case .search:
+                SearchView()
+            case .reimburse:
+                NavigationStack { ReimburseListView() }
             }
         }
     }
@@ -102,21 +124,51 @@ struct BillsView: View {
     // MARK: - 月份栏
 
     private var monthBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    month = Dates.addMonths(month, -1)
+        ZStack {
+            HStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        month = Dates.addMonths(month, -1)
+                    }
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(T.text2)
+                        .frame(width: 34, height: 30)
+                        .contentShape(Rectangle())
                 }
-            } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(T.text2)
-                    .frame(width: 34, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            Spacer()
+                Spacer()
+
+                HStack(spacing: 2) {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            month = Dates.addMonths(month, 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Dates.isSameMonth(month, Date()) ? T.text3.opacity(0.4) : T.text2)
+                            .frame(width: 34, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(Dates.isSameMonth(month, Date()))
+
+                    Button {
+                        Haptic.tap()
+                        sheet = .search
+                    } label: {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 13.5, weight: .semibold))
+                            .foregroundStyle(T.text2)
+                            .frame(width: 34, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
             Menu {
                 ForEach(0..<6, id: \.self) { i in
@@ -140,23 +192,8 @@ struct BillsView: View {
                 .padding(.horizontal, 8)
                 .contentShape(Rectangle())
             }
-
-            Spacer()
-
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) {
-                    month = Dates.addMonths(month, 1)
-                }
-            } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Dates.isSameMonth(month, Date()) ? T.text3.opacity(0.4) : T.text2)
-                    .frame(width: 34, height: 30)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(Dates.isSameMonth(month, Date()))
         }
+        .frame(height: 32)
     }
 
     // MARK: - 主数字
@@ -188,34 +225,47 @@ struct BillsView: View {
                 miniStat("结余", (balance < 0 ? "-¥" : "¥") + Fmt.money(abs(balance)))
                 Spacer()
 
-                Button {
-                    Haptic.tap()
-                    sheet = .scan
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.text.viewfinder")
-                            .font(.system(size: 11.5, weight: .semibold))
-                        Text("识别")
-                            .font(.system(size: 11.5, weight: .medium))
+                HStack(spacing: 6) {
+                    Button {
+                        Haptic.tap()
+                        sheet = .text
+                    } label: {
+                        heroChip(icon: "text.alignleft", title: "手记")
                     }
-                    .foregroundStyle(T.text2)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(T.grouped, in: Capsule())
+                    .buttonStyle(.plain)
+
+                    Button {
+                        Haptic.tap()
+                        sheet = .scan
+                    } label: {
+                        heroChip(icon: "doc.text.viewfinder", title: "识别")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(.top, 16)
 
             if pendingReimbursement > 0 || doneReimbursement > 0 {
                 HStack(spacing: 7) {
                     if pendingReimbursement > 0 {
-                        reimbChip("待报销 ¥" + Fmt.money(pendingReimbursement),
-                                  tint: ReimbursementState.pending.tint)
+                        Button {
+                            Haptic.tap()
+                            sheet = .reimburse
+                        } label: {
+                            reimbChip("待报销 ¥" + Fmt.money(pendingReimbursement),
+                                      tint: ReimbursementState.pending.tint)
+                        }
+                        .buttonStyle(.plain)
                     }
                     if doneReimbursement > 0 {
-                        reimbChip("已报销 ¥" + Fmt.money(doneReimbursement),
-                                  tint: ReimbursementState.done.tint)
+                        Button {
+                            Haptic.tap()
+                            sheet = .reimburse
+                        } label: {
+                            reimbChip("已报销 ¥" + Fmt.money(doneReimbursement),
+                                      tint: ReimbursementState.done.tint)
+                        }
+                        .buttonStyle(.plain)
                     }
                     Spacer()
                 }
@@ -223,6 +273,53 @@ struct BillsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 识别待核对：只做一件事 —— 让人一眼看到、一下点进去
+    private var reviewBanner: some View {
+        Button {
+            Haptic.tap()
+            if let first = reviewBills.first { sheet = .detail(first) }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(T.orange)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(reviewBills.count) 笔截图识别待核对")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(T.text)
+                    Text("金额没十足把握，点进去对一眼")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(T.text3)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(T.text3)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(T.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 16)
+    }
+
+    private func heroChip(icon: String, title: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 11.5, weight: .semibold))
+            Text(title)
+                .font(.system(size: 11.5, weight: .medium))
+        }
+        .foregroundStyle(T.text2)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(T.grouped, in: Capsule())
     }
 
     private func reimbChip(_ text: String, tint: Color) -> some View {
@@ -296,9 +393,9 @@ struct BillsView: View {
                     VStack(spacing: 6) {
                         dayHeader(group.day, items: group.items)
                         GroupCard {
-                            ForEach(Array(group.items.indices), id: \.self) { i in
-                                row(group.items[i])
-                                if i < group.items.count - 1 {
+                            ForEach(group.items) { bill in
+                                row(bill)
+                                if bill.persistentModelID != group.items.last?.persistentModelID {
                                     RowDivider()
                                 }
                             }
@@ -310,7 +407,9 @@ struct BillsView: View {
     }
 
     private func dayHeader(_ day: Date, items: [Bill]) -> some View {
-        let out = items.filter { $0.type == .expense }.reduce(0) { $0 + $1.accountingAmount }
+        // 跟当天列表逐行显示的数字保持一致：这里若扣掉已报销的，
+        // 会出现「小计 100、下面两行各 100」的对不上
+        let out = items.filter { $0.type == .expense }.reduce(0) { $0 + $1.amount }
         let income = items.filter { $0.type == .income }.reduce(0) { $0 + $1.amount }
         return HStack {
             Text(Dates.dayTitle(day))
@@ -351,17 +450,12 @@ struct BillsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Text(bill.title)
-                            .font(.system(size: 14.5, weight: .medium))
-                            .foregroundStyle(T.text)
-                            .lineLimit(1)
-                        if bill.isTracked && bill.type == .expense {
-                            TrackBadge(status: bill.status, days: bill.daysUsed)
-                        }
-                    }
+                    Text(bill.title)
+                        .font(.system(size: 14.5, weight: .medium))
+                        .foregroundStyle(T.text)
+                        .lineLimit(1)
                     HStack(spacing: 0) {
-                        Text("\(bill.category.name) · \(bill.account)")
+                        Text(bill.category.name)
                             .foregroundStyle(T.text3)
                         if bill.type == .expense && bill.reimbursement != .none {
                             Text(" · ")
@@ -382,12 +476,7 @@ struct BillsView: View {
                         .foregroundStyle(bill.reimbursement == .done ? T.text3 : T.text)
                         .strikethrough(bill.reimbursement == .done, color: T.text3)
                         .monospacedDigit()
-                    if bill.showsDailyCost {
-                        Text("日均 ¥\(Fmt.money1(bill.dailyCost))")
-                            .font(.system(size: 9.5))
-                            .foregroundStyle(T.text3)
-                            .monospacedDigit()
-                    } else if bill.reimbursement == .pending {
+                    if bill.reimbursement == .pending {
                         Text("垫付中")
                             .font(.system(size: 9.5))
                             .foregroundStyle(ReimbursementState.pending.tint)
@@ -427,7 +516,7 @@ struct BillsView: View {
             Button(role: .destructive) {
                 delete(bill)
             } label: {
-                Label("删除", systemImage: "trash")
+                Label("移到回收站", systemImage: "trash")
             }
         }
     }
@@ -444,8 +533,11 @@ struct BillsView: View {
     private func markReimbursement(_ bill: Bill, _ state: ReimbursementState) {
         Haptic.tap()
         bill.reimbursement = state
-        try? context.save()
-        showToast(state == .done ? "已标记报销到账" : "已标记待报销")
+        if let error = AppData.save(context) {
+            saveError = error
+        } else {
+            showToast(state == .done ? "已标记报销到账" : "已标记待报销")
+        }
     }
 
     private func duplicate(_ bill: Bill) {
@@ -453,19 +545,21 @@ struct BillsView: View {
                         amount: bill.amount,
                         categoryID: bill.categoryID,
                         note: bill.note,
-                        date: Date(),
-                        account: bill.account,
-                        isTracked: false,
-                        status: .done)
+                        date: Date())
         context.insert(copy)
-        try? context.save()
-        showToast("已复制到今天的账单")
+        if let error = AppData.save(context) {
+            saveError = error
+        } else {
+            showToast("已复制到今天的账单")
+        }
     }
 
     private func delete(_ bill: Bill) {
-        context.delete(bill)
-        try? context.save()
-        showToast("已删除")
+        if let error = Trash.move(bill, in: context) {
+            saveError = error
+        } else {
+            showToast("已移到回收站，30 天内可找回")
+        }
     }
 
     private func showToast(_ text: String) {
@@ -482,6 +576,9 @@ enum BillsSheet: Identifiable {
     case add(Bill?)
     case detail(Bill)
     case scan
+    case text
+    case search
+    case reimburse
 
     var id: String {
         switch self {
@@ -491,6 +588,12 @@ enum BillsSheet: Identifiable {
             return "detail-\(bill.persistentModelID.hashValue)"
         case .scan:
             return "scan"
+        case .text:
+            return "text"
+        case .search:
+            return "search"
+        case .reimburse:
+            return "reimburse"
         }
     }
 }

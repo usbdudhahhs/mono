@@ -2,7 +2,7 @@
 //  AddRecordView.swift
 //  MonoLedger
 //
-//  记账面板：自定义键盘、分类网格、追踪 / 报销 / 凭证
+//  记账面板：自定义键盘、分类网格、报销 / 凭证
 //
 
 import SwiftUI
@@ -21,12 +21,12 @@ struct AddRecordView: View {
     @State private var categoryID: String = "food"
     @State private var note: String = ""
     @State private var date: Date = Date()
-    @State private var account: String = "微信"
-    @State private var tracked: Bool = false
     @State private var reimbursement: ReimbursementState = .none
     @State private var receiptData: Data?
     @State private var receiptItem: PhotosPickerItem?
     @State private var showDatePicker = false
+    @State private var showTextInput = false
+    @State private var saveError: String?
 
     @FocusState private var noteFocused: Bool
 
@@ -37,7 +37,7 @@ struct AddRecordView: View {
     // MARK: - 计算
 
     private var amount: Double { Double(amountText) ?? 0 }
-    private var canSave: Bool { amount > 0 }
+    private var canSave: Bool { amount.isFinite && amount > 0 }
     private var categories: [Category] { Catalog.list(type) }
 
     private var displayAmount: String {
@@ -94,7 +94,6 @@ struct AddRecordView: View {
                 categoryID = Catalog.list(newValue).first?.id ?? "more"
             }
             if newValue == .income {
-                tracked = false
                 reimbursement = .none
             }
         }
@@ -103,9 +102,10 @@ struct AddRecordView: View {
             Task { await loadReceipt(item) }
         }
         .onAppear(perform: loadInitial)
-        .sheet(isPresented: $showDatePicker) {
-            datePickerSheet
-        }
+        .sheet(isPresented: $showDatePicker) { datePickerSheet }
+        .alert("保存失败", isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button("好", role: .cancel) { saveError = nil }
+        } message: { Text(saveError ?? "请稍后重试。") }
     }
 
     // MARK: - 顶部
@@ -125,6 +125,26 @@ struct AddRecordView: View {
 
             Spacer()
 
+            if editing == nil {
+                Button {
+                    showTextInput = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "text.alignleft")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text("打一句话")
+                            .font(.system(size: 11.5, weight: .medium))
+                    }
+                    .foregroundStyle(T.text2)
+                    .padding(.horizontal, 10)
+                    .frame(height: 26)
+                    .background(T.fill, in: Capsule())
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
+
             Button {
                 save()
             } label: {
@@ -140,6 +160,11 @@ struct AddRecordView: View {
         }
         .padding(.horizontal, T.hPadding)
         .padding(.top, 14)
+        .sheet(isPresented: $showTextInput) {
+            TextRecordSheet(onApply: { result in
+                applyParsed(result)
+            })
+        }
     }
 
     // MARK: - 金额
@@ -210,11 +235,6 @@ struct AddRecordView: View {
                 }
 
                 if type == .expense {
-                    chip(icon: "clock.arrow.circlepath", text: "追踪", active: tracked) {
-                        Haptic.tap()
-                        tracked.toggle()
-                    }
-
                     Menu {
                         ForEach(ReimbursementState.allCases) { st in
                             Button {
@@ -230,14 +250,6 @@ struct AddRecordView: View {
                                   active: reimbursement != .none,
                                   activeTint: reimbursement.tint)
                     }
-                }
-
-                Menu {
-                    ForEach(Catalog.accounts, id: \.self) { a in
-                        Button(a) { account = a }
-                    }
-                } label: {
-                    chipLabel(icon: "creditcard", text: account, active: false)
                 }
 
                 Spacer(minLength: 0)
@@ -447,8 +459,6 @@ struct AddRecordView: View {
         categoryID = bill.categoryID
         note = bill.note
         date = bill.date
-        account = bill.account
-        tracked = bill.isTracked && bill.type == .expense
         reimbursement = bill.type == .expense ? bill.reimbursement : .none
         receiptData = bill.receiptData
 
@@ -462,6 +472,29 @@ struct AddRecordView: View {
               let image = UIImage(data: data),
               let compressed = ReceiptStore.compress(image) else { return }
         await MainActor.run { receiptData = compressed }
+    }
+
+    /// 把「打一句话」的解析结果填进面板，仍然要用户看一眼再保存
+    private func applyParsed(_ result: ParseResult) {
+        guard result.amount > 0 else { return }
+
+        // 先设分类再设类型：type 的 onChange 只会在分类不属于新类型时才重置
+        if Catalog.list(result.type).contains(where: { $0.id == result.categoryID }) {
+            categoryID = result.categoryID
+        }
+        type = result.type
+
+        let raw = String(format: "%.2f", result.amount)
+        amountText = raw.hasSuffix(".00") ? String(raw.dropLast(3)) : raw
+
+        if !result.merchant.isEmpty {
+            note = result.merchant
+        }
+        date = result.date
+
+        if result.type == .income {
+            reimbursement = .none
+        }
     }
 
     private func save() {
@@ -478,30 +511,27 @@ struct AddRecordView: View {
             bill.categoryID = categoryID
             bill.note = trimmed
             bill.date = date
-            bill.account = account
-            bill.isTracked = (type == .expense) ? tracked : false
             bill.reimbursement = reimb
             bill.receiptData = receiptData
-            if bill.isTracked && bill.status == .done {
-                bill.status = .active
-            }
+            // 亲手改过就等于核对过了
+            bill.markReviewed()
         } else {
             let bill = Bill(type: type,
                             amount: rounded,
                             categoryID: categoryID,
                             note: trimmed,
                             date: date,
-                            account: account,
-                            isTracked: (type == .expense) ? tracked : false,
-                            status: (type == .expense && tracked) ? .active : .done,
                             reimbursement: reimb,
                             receiptData: receiptData)
             context.insert(bill)
         }
 
-        try? context.save()
-        Haptic.success()
-        dismiss()
+        if let error = AppData.save(context) {
+            saveError = "账单没有保存成功：\(error)"
+        } else {
+            Haptic.success()
+            dismiss()
+        }
     }
 }
 
