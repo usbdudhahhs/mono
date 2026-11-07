@@ -114,6 +114,9 @@ for s in seeds {
             print("DBG   base行: \(a.map { String(reflecting: $0) })")
             print("DBG   mut行 : \(b.map { String(reflecting: $0) })")
             print("DBG   同串二次解析: \(BillParser.parse(text: t).amount)  基准二次: \(BillParser.parse(text: s.text).amount)")
+            print("DBG   行拼回解析: base=\(BillParser.parse(text: a.joined(separator: "\n")).amount) mut=\(BillParser.parse(text: b.joined(separator: "\n")).amount)")
+            print("DBG   t: 字符数=\(t.count) 含CR=\(t.contains("\r")) 含TAB=\(t.contains("\t"))")
+            print("DBG   拆分后各段标量: \(t.components(separatedBy: .newlines).map { $0.unicodeScalars.map { $0.value } })")
             print("DBG   归一化: \(b.map { String(reflecting: BillParser.normalize($0)) })")
         }
         ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
