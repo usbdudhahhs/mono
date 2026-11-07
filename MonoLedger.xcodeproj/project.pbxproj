@@ -214,7 +214,7 @@
 			dependencies = (
 			);
 			name = MonoLedger;
-			productName = {APP};
+			productName = MonoLedger;
 			productReference = EF0182DF85A7CD0319333F24 /* MonoLedger.app */;
 			productType = "com.apple.product-type.application";
 		};

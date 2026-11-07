@@ -94,6 +94,110 @@ def check_categories():
           f"规则表 支出 {len(exp_rules)} 组 / 收入 {len(inc_rules)} 组，全部对得上")
 
 
+def check_pbxproj_syntax(pbx):
+    """最小 OpenStep plist 语法校验（不依赖任何第三方库）。
+
+    project.pbxproj 是 OpenStep 格式的 plist，不是 JSON 也不是 XML。
+    花括号配平不代表合法：`productName = {APP};` 这种没替换掉的模板占位符
+    会让 xcodebuild 直接报 `Unable to read project`，而括号计数完全正常——
+    实际踩过这个坑，交付包里就是这么写的。
+    """
+    i, n = 0, len(pbx)
+
+    def skip(i):
+        while i < n:
+            if pbx[i] in " \t\r\n":
+                i += 1
+            elif pbx.startswith("/*", i):
+                j = pbx.find("*/", i + 2)
+                if j < 0:
+                    raise ValueError(f"块注释未闭合 @ {i}")
+                i = j + 2
+            elif pbx.startswith("//", i):
+                j = pbx.find("\n", i)
+                i = n if j < 0 else j + 1
+            else:
+                break
+        return i
+
+    def line_at(i):
+        return pbx[:i].count("\n") + 1
+
+    def value(i):
+        i = skip(i)
+        if i >= n:
+            raise ValueError("文件意外结束，缺少值")
+        c = pbx[i]
+        if c == "{":
+            return dictionary(i)
+        if c == "(":
+            return array(i)
+        if c == '"':
+            return quoted(i)
+        start = i
+        while i < n and pbx[i] not in " \t\r\n=;,'\"(){}":
+            i += 1
+        if i == start:
+            raise ValueError(f"第 {line_at(i)} 行出现非法字符 {pbx[i]!r}")
+        return i
+
+    def quoted(i):
+        i += 1
+        while i < n:
+            if pbx[i] == "\\":
+                i += 2
+                continue
+            if pbx[i] == '"':
+                return i + 1
+            i += 1
+        raise ValueError("字符串引号未闭合")
+
+    def dictionary(i):
+        i += 1
+        while True:
+            i = skip(i)
+            if i >= n:
+                raise ValueError("花括号未闭合")
+            if pbx[i] == "}":
+                return i + 1
+            i = value(i)
+            i = skip(i)
+            if i >= n or pbx[i] != "=":
+                raise ValueError(f"第 {line_at(i)} 行：键后面缺少 =（可能是占位符没替换，"
+                                 f"附近内容 {pbx[max(0, i - 40):i + 20]!r}）")
+            i = value(i + 1)
+            i = skip(i)
+            if i >= n or pbx[i] != ";":
+                raise ValueError(f"第 {line_at(i)} 行：值后面缺少分号")
+            i += 1
+
+    def array(i):
+        i += 1
+        while True:
+            i = skip(i)
+            if i >= n:
+                raise ValueError("圆括号未闭合")
+            if pbx[i] == ")":
+                return i + 1
+            i = value(i)
+            i = skip(i)
+            if i >= n or pbx[i] != ",":
+                raise ValueError(f"第 {line_at(i)} 行：数组元素后面缺少逗号")
+            i += 1
+
+    try:
+        end = skip(value(0))
+        if end != n:
+            raise ValueError(f"第 {line_at(end)} 行：根对象之后还有多余内容")
+    except ValueError as exc:
+        return str(exc)
+
+    leftover = re.search(r"=\s*\{[A-Za-z_][A-Za-z0-9_]*\}\s*;", pbx)
+    if leftover:
+        return f"第 {line_at(leftover.start())} 行存在未替换的模板占位符 {leftover.group(0)!r}"
+    return None
+
+
 def main():
     if not os.path.exists(PBX):
         print("✗ 找不到 project.pbxproj，请确认在工程根目录执行")
@@ -104,6 +208,11 @@ def main():
     # 1) 括号平衡：最常见的工程文件损坏
     if pbx.count("{") != pbx.count("}"):
         fail(f"project.pbxproj 花括号不平衡（{pbx.count('{')} 个 {{ vs {pbx.count('}')} 个 }}）")
+    else:
+        # 配平不等于合法：占位符、缺分号都会让 xcodebuild 读不了整个工程
+        syntax_error = check_pbxproj_syntax(pbx)
+        if syntax_error:
+            fail(f"project.pbxproj 语法不合法，xcodebuild 会报 Unable to read project：{syntax_error}")
 
     # 2) 磁盘上的 Swift 文件 vs 编译列表
     #    两个 target 分开比：混在一起只算总数，会把「文件加错 target」漏过去
