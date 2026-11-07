@@ -321,7 +321,8 @@ final class LedgerStateMachineTests: XCTestCase {
         try context.save()
 
         let originalDay = bill.date
-        XCTAssertNotNil(Trash.move(bill, in: context))
+        // Trash.move 成功时返回 nil（错误文案才非空），别写成 NotNil
+        XCTAssertNil(Trash.move(bill, in: context), "移入回收站应成功")
         XCTAssertEqual(try activeBills(context).count, 0, "回收站里的不该出现在首页")
 
         bill.deletedAt = nil
