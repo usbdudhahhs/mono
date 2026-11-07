@@ -388,6 +388,18 @@ def main():
     elif test_ids and set(test_ids) != {app_ids[0] + ".tests"}:
         fail(f"测试 target 的 Bundle ID 应为 {app_ids[0]}.tests，实际 {' / '.join(sorted(set(test_ids)))}")
 
+    # 10) 版本号只能有一个来源
+    #     pbxproj 里是 2.0.6，「我的」页脚写死成 2.0.5，用户看到的就是过期号。
+    #     这种漂移不会报错、不会崩，只会让人怀疑装错了版本。界面层一律从 Bundle 读。
+    marketing = sorted(set(re.findall(r"MARKETING_VERSION = ([^;]+);", pbx)))
+    if len(set(marketing)) > 1:
+        fail(f"Debug 与 Release 的 MARKETING_VERSION 不一致：{' / '.join(marketing)}")
+    for swift_path in glob.glob("MonoLedger/Views/**/*.swift", recursive=True):
+        source = open(swift_path, encoding="utf-8").read()
+        for hit in re.finditer(r'"[^"\n]*?\b(\d+\.\d+\.\d+)\b', source):
+            fail(f"{swift_path} 里硬编码了版本号 {hit.group(1)}，"
+                 f"应改为从 Bundle 读取")
+
     # 结果
     print()
     if problems:

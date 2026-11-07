@@ -76,6 +76,13 @@ struct MeView: View {
             .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
     }
 
+    /// 页脚版本号直接从 Info.plist 读，不要在源码里写死。
+    /// 之前这里写死成 2.0.5，工程里已经升到 2.0.6 了，用户看到的是过期版本号。
+    private var versionText: String {
+        let v = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return "MONO 记账 · " + (v ?? "—")
+    }
+
     private var themeLabel: String {
         switch themeMode {
         case "light": return "浅色"
@@ -92,7 +99,7 @@ struct MeView: View {
                 overview
                 if shouldRemindBackup { backupReminder }
                 menuList
-                Text("MONO 记账 · 2.0.5\n数据存储在本机，不上传服务器")
+                Text("\(versionText)\n数据存储在本机，不上传服务器")
                     .font(.system(size: 10.5))
                     .foregroundStyle(T.text3)
                     .multilineTextAlignment(.center)
