@@ -867,7 +867,17 @@ enum BillParser {
     /// 把一段手打或粘贴的文字解析成一笔账单。
     /// 多行走和截图完全相同的 OCR 管线；单行走口语短句管线。
     static func parse(text: String) -> ParseResult {
-        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 换行必须先统一，而且要放在任何判断之前。
+        //
+        // Swift 把 "\r\n" 当成【一个】 Character，所以对 CRLF 文本
+        // `raw.contains("\n")` 返回 false —— 多行小票会被误判成「单句」，
+        // 走 parseSentence 的捷径，整页只剩一个数字，金额、商户、档位全丢。
+        // 症状极隐蔽：把同一张小票的文本换行改成 CRLF，88.00 就变成 12.00
+        // （找零那行的数字），而且打印出来的每一行看着完全一样。
+        let raw = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return ParseResult() }
 
         if !raw.contains("\n"), let quick = parseSentence(raw) {
@@ -875,14 +885,8 @@ enum BillParser {
         }
 
         let lines: [OCRLine] = raw
-            // 统一换行：\r\n 和 \n 必须给出完全一样的行列表。
-            // 之前遇到 CRLF 文本（粘贴板、跨平台复制、某些 OCR 结果）时，
-            // 加空白前后金额会莫名其妙地从 88.00 变成 12.00，
-            // 而打印出来的行看起来又完全一致 —— 与其追这个，不如从源头统一。
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n")
-            // 这里用 whitespacesAndNewlines：\r 属于 newlines 而不是 whitespaces，
+            // 用 whitespacesAndNewlines：\r 属于 newlines 而不是 whitespaces，
             // 用 .whitespaces 修不掉行尾残留的回车
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
