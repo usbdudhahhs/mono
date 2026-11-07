@@ -82,7 +82,9 @@ enum LatestScreenshot {
         await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
             options.deliveryMode = .highQualityFormat
-            options.resizeMode = .downscale
+            // PHImageRequestOptionsResizeMode 只有 .none / .fast / .exact，
+            // 没有 .downscale。要「按目标尺寸精确裁剪」就用 .exact。
+            options.resizeMode = .exact
             options.isNetworkAccessAllowed = true
 
             // 回调可能在任意线程来，而且还可能先给一张模糊的、再给清晰的，

@@ -63,12 +63,15 @@ struct ScreenshotBookkeepingIntent: AppIntent {
         let uiImage: UIImage
 
         if let file = image {
-            // 快捷指令有时给的是文件 URL，不一定是内存里的 Data
-            var data = file.data
-            if data == nil, let url = file.fileURL {
-                data = try? Data(contentsOf: url)
+            // 快捷指令有时给的是文件 URL，不一定是内存里的 Data。
+            // 注意 IntentFile.data 是非可选的 Data：不能跟 nil 比、不能拿 try? 往上赋、
+            // 也不能再 guard let 一次（编译器会报「not Optional type」）。
+            // 「有没有内容」用 isEmpty 判断。
+            var raw = file.data
+            if raw.isEmpty, let url = file.fileURL, let fromDisk = try? Data(contentsOf: url) {
+                raw = fromDisk
             }
-            guard let data, let decoded = UIImage(data: data) else {
+            guard let decoded = UIImage(data: raw) else {
                 throw ScreenshotIntentError.missingImage
             }
             uiImage = decoded

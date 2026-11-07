@@ -64,13 +64,13 @@ jobs:
             2>&1 | tee test-core.log | grep -E "error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
           if grep -q "TEST SUCCEEDED" test-core.log; then
             echo "## ✅ 核心逻辑测试通过" >> "$GITHUB_STEP_SUMMARY"
-          elif grep -qE "xcodebuild: error|Unable to read project" test-core.log; then
-            # 这不是「测试失败」，是工程压根没被读进来——xcodebuild 一条测试都没跑。
+          elif grep -qE "xcodebuild: error|Unable to read project|BUILD FAILED" test-core.log; then
+            # 这不是「测试失败」，是源码压根没编译过——xcodebuild 一条测试都没跑。
             # 以前这种情况会被记成「测试未通过（可容忍）」，看起来像跑过，实际是空转。
-            echo "::error::xcodebuild 无法读取工程，一条测试都没有执行"
-            echo "## ❌ 测试根本没跑起来（工程读取失败，不是测试失败）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::源码未通过编译，一条测试都没有执行"
+            echo "## ❌ 测试根本没跑起来（编译失败，不是测试失败）" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E "xcodebuild: error|Unable to read project" test-core.log | head -5 >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:|BUILD FAILED" test-core.log | head -10 >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "## ⚠️ 核心逻辑测试未通过（ipa 仍会打包，请留意）" >> "$GITHUB_STEP_SUMMARY"
