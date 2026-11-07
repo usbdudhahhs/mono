@@ -3,6 +3,9 @@ name: Build iOS App
 on:
   push:
     branches: [ main ]
+    # 只改文档不该烧掉一次 10 分钟的 macOS 构建
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
 jobs:
