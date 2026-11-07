@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import ImageIO
+import UIKit
 
 struct AttachmentGalleryView: View {
     @Environment(\.modelContext) private var context

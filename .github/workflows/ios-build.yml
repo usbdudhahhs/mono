@@ -19,6 +19,10 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
 
       # 0) 编译前自检：工程文件漏了任何一处，都在这里说清楚，不用等五分钟才看到 xcodebuild 报错
+      #    三个脚本都不依赖 Swift 工具链，纯 Python：
+      #    selfcheck.py           工程引用 / 分类 ID 一致性
+      #    static_compile_check.py 符号解析 / import 覆盖 / API 可用性
+      #    amount_lab.py          金额链路：把 BillParser 的正则抽出来镜像执行
       - name: 工程自检
         run: |
           set -o pipefail
@@ -27,10 +31,14 @@ jobs:
             echo "⚠️ 没找到 scripts/selfcheck.py，已跳过自检" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          python3 scripts/selfcheck.py | tee selfcheck.log
+          {
+            python3 scripts/selfcheck.py
+            if [ -f scripts/static_compile_check.py ]; then python3 scripts/static_compile_check.py; fi
+            if [ -f scripts/amount_lab.py ]; then python3 scripts/amount_lab.py; fi
+          } 2>&1 | tee selfcheck.log
           echo "### 工程自检" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          cat selfcheck.log >> "$GITHUB_STEP_SUMMARY"
+          tail -n 60 selfcheck.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       # 核心逻辑回归测试：退款/报销统计、OCR/自然语言金额边界、旧备份兼容
@@ -124,6 +132,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      # 3) 解析器回归：判定器（金标准+蜕变+不变量+几何）→ 模糊 3000 条 → 变异 18 个。
+      #    放在打包之后跑，ipa 已经拿到手了再慢慢跑，不会因为这一步失败而拿不到产物。
+      #    macOS runner 自带 swiftc，不需要额外装工具链。
+      - name: 解析器回归（判定器 / 模糊 / 变异）
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          if [ ! -d scripts/parser_lab ]; then
+            echo "## ⚠️ 没有 scripts/parser_lab，跳过解析器回归" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          bash scripts/parser_lab/run.sh 2>&1 | tee parser-lab.log
+          echo "## 解析器回归" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          tail -n 30 parser-lab.log >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: 上传编译日志
         if: always()
         uses: actions/upload-artifact@v4
@@ -134,4 +159,5 @@ jobs:
             build-sim.log
             selfcheck.log
             test-core.log
+            parser-lab.log
           retention-days: 7

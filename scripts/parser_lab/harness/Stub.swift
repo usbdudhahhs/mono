@@ -6,7 +6,15 @@ enum RecordType: String { case expense, income
 }
 struct Category { let id: String; let name: String }
 enum Catalog {
-    static let ids: Set<String> = ["food","transport","shopping","home","fun","health","study","social","digital","pet","travel","beauty","clothes","car","part","more","refund","moreIn","salary","bonus"]
+    /// 必须与 MonoLedger/Models/Category.swift 完全一致。
+    /// 之前这里是另一套词（transport / shopping / pet / travel …），
+    /// 谁要是拿它做断言，测试就会在错的词表上判通过。scripts/selfcheck.py 会盯这一行。
+    static let ids: Set<String> = [
+        // 支出
+        "food", "transit", "shop", "fun", "home", "health", "study", "social", "phone", "more",
+        // 收入
+        "salary", "bonus", "invest", "part", "red", "refund", "claim", "giftIn", "moreIn"
+    ]
     static func find(_ t: RecordType, _ id: String) -> Category { Category(id: id, name: id) }
 }
 enum Fmt { static func money(_ v: Double) -> String { String(format: "%.2f", v) } }

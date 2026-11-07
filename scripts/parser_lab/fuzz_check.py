@@ -38,6 +38,11 @@ def candidates(t):
         # 单逗号两位小数「45,00」
         m = re.fullmatch(r'(\d+),(\d{2})', tok)
         if m: add(m.group(1) + "." + m.group(2))
+        # 千分位逗号被 OCR 读成点「1.234.56」→ 解析器会拼成 1234.56。
+        # 这一条仍是原文数字的重组（不是凭空造数），所以放进候选集；
+        # 只认「1~3 位 . 3 位 . 1~2 位」这一种形状，避免把任意拼接都放过
+        m = re.fullmatch(r'(\d{1,3})\.(\d{3})\.(\d{1,2})', tok)
+        if m: add(m.group(1) + m.group(2) + "." + m.group(3))
     return out
 
 rows = [json.loads(l) for l in open(sys.argv[1], encoding="utf-8")]

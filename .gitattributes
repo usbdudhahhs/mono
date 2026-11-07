@@ -1,0 +1,17 @@
+# Windows 上 core.autocrlf=true 会把 .sh 的 shebang 写成 CRLF，
+# 到 macOS 上跑就是 "bad interpreter: /usr/bin/env: no such file"。
+# 这里把该是 LF 的文件钉死，免得换平台提交一次就坏一次。
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.swift text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.json eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.zip  binary
+*.ipa  binary

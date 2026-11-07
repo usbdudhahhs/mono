@@ -89,7 +89,9 @@ enum LatestScreenshot {
             // 没上锁的话两次回调会同时 resume，直接崩在 continuation 上
             let once = ResumeOnce()
 
-            PHImageManager.default().requestImage(
+            // 返回的是 PHImageRequestID，这里不取消请求，用 _ 显式丢掉，
+            // 免得留一条 unused-result 警告淹掉真正的告警
+            _ = PHImageManager.default().requestImage(
                 for: asset,
                 targetSize: CGSize(width: maxPixel, height: maxPixel),
                 contentMode: .aspectFit,

@@ -91,9 +91,15 @@ enum Trash {
         guard let cutoff = Calendar.current.date(byAdding: .day,
                                                  value: -retentionDays,
                                                  to: Date()) else { return }
-        guard let all = try? context.fetch(FetchDescriptor<Bill>()) else { return }
 
-        let expired = all.filter { bill in
+        // 只捞回收站里的：账本用了几年之后，正常账单是几万条，回收站可能只有几条，
+        // 全表捞出来再在内存里挑，等于每次启动都白读一遍全集。
+        // 时间比较仍放在内存里做 —— 谓词里做日期比较更省事，但一旦系统版本换了
+        // 谓词翻译方式，失败会静默变成「一条都不清」，宁可多走一步保险
+        let trashed = FetchDescriptor<Bill>(predicate: #Predicate<Bill> { $0.deletedAt != nil })
+        guard let candidates = try? context.fetch(trashed) else { return }
+
+        let expired = candidates.filter { bill in
             guard let deletedAt = bill.deletedAt else { return false }
             return deletedAt < cutoff
         }

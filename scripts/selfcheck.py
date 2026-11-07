@@ -28,6 +28,72 @@ def fail(msg):
     print("✗ " + msg)
 
 
+def _ids(block):
+    return re.findall(r'Category\(id:\s*"([^"]+)"', block)
+
+
+def check_categories():
+    """Category 目录 / 规则表 / 测试 Stub 三处分类 ID 必须一致"""
+    cat_path = "MonoLedger/Models/Category.swift"
+    rules_path = "MonoLedger/Support/MerchantRules.swift"
+    if not (os.path.exists(cat_path) and os.path.exists(rules_path)):
+        return
+
+    src = open(cat_path, encoding="utf-8").read()
+    try:
+        exp_ids = set(_ids(src.split("static let expense")[1].split("static let income")[0]))
+        inc_ids = set(_ids(src.split("static let income")[1].split("static func list")[0]))
+    except IndexError:
+        fail("Category.swift 结构变了，无法解析支出/收入分类表")
+        return
+    if not exp_ids or not inc_ids:
+        fail("Category.swift 里没解析出分类 ID，请确认格式：Category(id: \"food\", ...)")
+        return
+
+    # 8.1 规则表：支出表只能给支出分类，收入表只能给收入分类
+    rules = open(rules_path, encoding="utf-8").read()
+    if "incomeTable" not in rules:
+        fail("MerchantRules 里找不到 incomeTable")
+        return
+    exp_rules = re.findall(r'\("([A-Za-z]+)",\s*\[', rules.split("incomeTable")[0])
+    inc_rules = re.findall(r'\("([A-Za-z]+)",\s*\[',
+                           rules.split("incomeTable")[1].split("static func match")[0])
+
+    for name in exp_rules:
+        if name not in exp_ids:
+            fail(f"支出规则表用了不存在的分类 {name}（Catalog.expense 里没有）→ 账本会静默归到「其他」")
+    for name in inc_rules:
+        if name not in inc_ids:
+            fail(f"收入规则表用了不存在的分类 {name}（Catalog.income 里没有）→ 账本会静默归到「其他」")
+
+    # 8.2 代码里硬编码的分类字面量必须是真实分类
+    all_ids = exp_ids | inc_ids
+    for swift_path in glob.glob("MonoLedger/**/*.swift", recursive=True):
+        if os.path.basename(swift_path) in ("Category.swift", "MerchantRules.swift"):
+            continue
+        source = open(swift_path, encoding="utf-8").read()
+        for lit in set(re.findall(r'categoryID\s*[:=]\s*"([A-Za-z]+)"', source)):
+            if lit not in all_ids:
+                fail(f"{swift_path} 硬编码了不存在的分类 {lit}")
+
+    # 8.3 测试脚手架的 Stub 必须使用同一套词，否则测试在错的词表上判定通过
+    stub_path = "scripts/parser_lab/harness/Stub.swift"
+    if os.path.exists(stub_path):
+        stub = open(stub_path, encoding="utf-8").read()
+        m = re.search(r"ids\s*:\s*Set<String>\s*=\s*\[([^\]]*)\]", stub)
+        if m:
+            stub_ids = set(re.findall(r'"([A-Za-z]+)"', m.group(1)))
+            missing = stub_ids - all_ids
+            absent = all_ids - stub_ids
+            if missing:
+                fail("解析器测试的 Stub.Catalog.ids 里有 App 不存在的分类：" + "、".join(sorted(missing)))
+            if absent:
+                fail("解析器测试的 Stub.Catalog.ids 少了 App 已有的分类：" + "、".join(sorted(absent)))
+
+    print(f"分类 ID：支出 {len(exp_ids)} 个 / 收入 {len(inc_ids)} 个，"
+          f"规则表 支出 {len(exp_rules)} 组 / 收入 {len(inc_rules)} 组，全部对得上")
+
+
 def main():
     if not os.path.exists(PBX):
         print("✗ 找不到 project.pbxproj，请确认在工程根目录执行")
@@ -191,6 +257,13 @@ def main():
         source = open(swift_path, encoding="utf-8").read()
         if "try? context.save()" in source:
             fail(f"{swift_path} 仍存在静默忽略的 SwiftData 保存错误")
+
+    # 8) 分类 ID 一致性
+    #    分类 ID 是跨文件的隐式契约：规则表给什么，账本就存什么，Catalog 找不到就
+    #    静默掉到「其他」—— 界面上看着正常，实际分类全丢，而且不报错。
+    #    测试脚手架的 Stub 用的是另一套词（transport / shopping / pet …），
+    #    它一旦被谁用上，测试就会在错误的词表上判定通过。这里把三处对齐。
+    check_categories()
 
     # 结果
     print()
