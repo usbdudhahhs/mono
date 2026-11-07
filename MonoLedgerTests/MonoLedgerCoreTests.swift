@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import SwiftData
 @testable import MonoLedger
 
 final class MonoLedgerCoreTests: XCTestCase {
@@ -350,7 +351,7 @@ final class LedgerStateMachineTests: XCTestCase {
         XCTAssertEqual(result.added, 3)
 
         let restored = try allBills(target)
-        XCTAssertEqual(Set(restored.map(\.uuid)), Set(bills.map(\.uuid)), "uuid 必须原样保留")
+        XCTAssertEqual(Set(restored.map(\Bill.uuid)), Set(bills.map(\Bill.uuid)), "uuid 必须原样保留")
         let lunch = restored.first { $0.note == "午饭" }
         XCTAssertEqual(lunch?.amount ?? 0, 32.5, accuracy: 0.001)
         XCTAssertEqual(lunch?.reimbursement, .pending)
@@ -470,7 +471,7 @@ final class LedgerStateMachineTests: XCTestCase {
             let active = try activeBills(context)
 
             XCTAssertEqual(snapshot.count,
-                           Set(snapshot.map(\.uuid)).count,
+                           Set(snapshot.map(\Bill.uuid)).count,
                            "第 \(step) 步后出现重复 uuid，合并去重失效")
             XCTAssertEqual(active.count,
                            snapshot.filter { $0.deletedAt == nil }.count,

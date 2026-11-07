@@ -49,15 +49,16 @@ jobs:
       # 核心逻辑回归测试：退款/报销统计、OCR/自然语言金额边界、旧备份兼容
       # 注意：测试失败不阻断打包。目标是拿到 ipa，测试结果只作为质量信号。
       - name: 核心逻辑 XCTest
-        continue-on-error: true
         run: |
           set -o pipefail
           DEVICE=$(xcrun simctl list devices available | awk -F'(' '/iPhone/ {gsub(/^ +| +$/,"",$1); print $1; exit}')
           if [ -z "$DEVICE" ]; then
-            echo "## ⚠️ 没找到可用 iPhone 模拟器，跳过测试（不影响 ipa）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::没找到可用 iPhone 模拟器，本轮跳过测试"
+            echo "## ⚠️ 无可用模拟器，跳过测试" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           echo "使用模拟器：$DEVICE"
+          set +e
           xcodebuild test \
             -project MonoLedger.xcodeproj \
             -scheme MonoLedger \
@@ -66,23 +67,31 @@ jobs:
             -derivedDataPath build-tests \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
-            2>&1 | tee test-core.log | grep -E "error:|Test Case|TEST (SUCCEEDED|FAILED)" || true
+            2>&1 | tee test-core.log | grep -E "error:|Test Case|TEST (SUCCEEDED|FAILED)"
+          set -e
+
           if grep -q "TEST SUCCEEDED" test-core.log; then
             echo "## ✅ 核心逻辑测试通过" >> "$GITHUB_STEP_SUMMARY"
-          elif grep -qE "xcodebuild: error|Unable to read project|BUILD FAILED" test-core.log; then
-            # 这不是「测试失败」，是源码压根没编译过——xcodebuild 一条测试都没跑。
-            # 以前这种情况会被记成「测试未通过（可容忍）」，看起来像跑过，实际是空转。
-            echo "::error::源码未通过编译，一条测试都没有执行"
-            echo "## ❌ 测试根本没跑起来（编译失败，不是测试失败）" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E "error:|BUILD FAILED" test-core.log | head -10 >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## ⚠️ 核心逻辑测试未通过（ipa 仍会打包，请留意）" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            grep -E "error:|failed|Failure" test-core.log | head -30 >> "$GITHUB_STEP_SUMMARY" || true
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -c "Test Case .* passed" test-core.log | xargs -I{} echo "用例数：{}"
+            exit 0
           fi
+
+          # 模拟器没起来属于环境问题，不该算代码的账；其余一律失败。
+          # 注意：这一步以前带 continue-on-error，配合 ::error:: 会显示成绿色，
+          # 结果是「测试编译不过」被当成通过 —— 现在直接 exit 1，红就是红。
+          if grep -qE "Unable to boot|Failed to boot|Simulator device failed to boot|Unable to find a destination|no such device" test-core.log; then
+            echo "## ⚠️ 模拟器启动失败，本轮跳过测试（与代码无关）" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "::error::核心逻辑测试未通过（编译失败或断言失败），详见日志"
+          {
+            echo "## ❌ 核心逻辑测试未通过"
+            echo '```'
+            grep -E "error:|failed|Failure" test-core.log | head -30
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       # 1) 免签名编译真机版本（供 SideStore / TrollStore 安装）
       - name: 编译真机版（未签名）
