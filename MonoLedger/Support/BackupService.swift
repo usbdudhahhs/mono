@@ -140,34 +140,18 @@ enum BackupService {
     }
 
     /// 凭证图统一降采样后再转 base64。
-    /// 原图动辄 300KB–1MB，base64 还要再涨三分之一；
-    /// 压到长边 1200 / JPEG 0.62 后通常只剩一百多 KB，肉眼几乎看不出差别。
+    /// 原图动辄 300KB–1MB，base64 还要再涨三分之一。
+    /// 这里不再自己写一套缩放：和记账时走同一条 ReceiptStore.compress，
+    /// 参数只有一处，改规格时不会出现「新存的图小了、备份里还是老的」。
     static func compressedReceiptBase64(_ data: Data) -> String? {
         guard !data.isEmpty else { return nil }
         let raw = data.base64EncodedString()
-        // 本来就小的图不再二次压缩，避免无谓的画质损失
-        if data.count <= 200_000 { return raw }
-        guard let image = UIImage(data: data), image.cgImage != nil else { return raw }
-        // 与记账时同一条缩放路径：竖拍的图按 orientation 摆正，否则会压成横图
-        let size = ReceiptStore.pixelSize(of: image)
-        let pixelW = size.width, pixelH = size.height
-        guard pixelW > 0, pixelH > 0 else { return raw }
-
-        let scale = min(1, 1200 / max(pixelW, pixelH))
-        let target = CGSize(width: max(1, (pixelW * scale).rounded()),
-                            height: max(1, (pixelH * scale).rounded()))
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = true
-        let rendered = UIGraphicsImageRenderer(size: target, format: format).image { ctx in
-            // 不透明画布必须自己铺白底，否则带透明通道的 PNG 会被填成黑块
-            UIColor.white.setFill()
-            ctx.fill(CGRect(origin: .zero, size: target))
-            image.draw(in: CGRect(origin: .zero, size: target))
-        }
-        guard let jpeg = rendered.jpegData(compressionQuality: 0.62),
-              jpeg.count < data.count else { return raw }
-        return jpeg.base64EncodedString()
+        // 已经压到目标体积以内就不再二次编码，避免无谓的画质损失
+        if data.count <= ReceiptStore.targetBytes { return raw }
+        guard let image = UIImage(data: data),
+              let small = ReceiptStore.compress(image),
+              small.count < data.count else { return raw }
+        return small.base64EncodedString()
     }
 
     static func encode(_ bills: [Bill], includeReceipts: Bool = true) throws -> Data {

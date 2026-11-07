@@ -102,7 +102,7 @@ struct AttachmentGalleryView: View {
         .confirmationDialog("压缩已有凭证图？",
                             isPresented: $showSlimConfirm,
                             titleVisibility: .visible) {
-            Button("压缩到长边 1200") { slimReceipts() }
+            Button("按新规格压缩（长边 1080）") { slimReceipts() }
             Button("取消", role: .cancel) {}
         } message: {
             Text("共 \(bills.count) 张，当前 \(ReceiptStore.sizeText(totalBytes))。压缩后放大仍能看清商户和金额，够报销对账，通常还能再省一半。")

@@ -9,11 +9,21 @@ import UIKit
 import ImageIO
 
 enum ReceiptStore {
-    /// 长边 1200 / JPEG 0.62
+    /// 长边 1080。
     ///
-    /// 一张 iPhone 截图约 1170×2532，缩到长边 1200 后是原图的一半分辨率，
-    /// 放进手机上双指放大，商户名、订单号、金额仍然清楚，报销对账够用；
-    /// 体积从 1~3MB 降到 80~150KB，一千笔账单的凭证图也就一百多兆。
+    /// 这个数字是按「看得清」倒推的，不是按「压得小」：
+    /// - iPhone 截图宽 1170，缩到 1080 几乎不损失横向像素，正文小字不会糊
+    /// - 相机照片 4032×3024 缩到 1080 后，全屏放大一倍仍能读出商户名和订单号
+    /// - 再往下（800）金额末两位就开始发虚，报销对账时反而要用户重拍
+    static let maxDimension: CGFloat = 1080
+
+    /// 单张目标体积 140KB。质量不够就降档，降到底还超就认了 ——
+    /// 宁可多占一点空间，也不让用户放大后看不清数字。
+    static let targetBytes = 140_000
+
+    /// JPEG 质量候选，从高往低试，取第一个满足体积的
+    static let qualitySteps: [CGFloat] = [0.72, 0.62, 0.52]
+
     /// 摆正后的像素尺寸。
     ///
     /// 相机竖着拍的照片，`cgImage` 存的是横的（4032×3024），真正的方向记在
@@ -31,9 +41,11 @@ enum ReceiptStore {
         }
     }
 
+    /// 缩到长边 maxDimension，再按质量档位试，取第一个落在 targetBytes 以内的。
+    /// 三档都不达标时返回最低档的结果（仍然比原图小得多），不返回 nil ——
+    /// 返回 nil 会让调用方以为「这张图不能用」，实际上它只是有点大。
     static func compress(_ image: UIImage,
-                         maxDimension: CGFloat = 1200,
-                         quality: CGFloat = 0.62) -> Data? {
+                         maxDimension: CGFloat = ReceiptStore.maxDimension) -> Data? {
         // 按像素算，不按 point：有些来源（相机、相册转码）给的 UIImage 是 2x/3x，
         // 用 size（point）判断会以为图很小而不缩，或缩完只剩三分之一分辨率，
         // 报销时放大看不清商户名
@@ -57,7 +69,14 @@ enum ReceiptStore {
             ctx.cgContext.fill(CGRect(origin: .zero, size: target))
             image.draw(in: CGRect(origin: .zero, size: target))
         }
-        return resized.jpegData(compressionQuality: quality)
+
+        var fallback: Data?
+        for quality in qualitySteps {
+            guard let data = resized.jpegData(compressionQuality: quality) else { continue }
+            if data.count <= targetBytes { return data }
+            fallback = data
+        }
+        return fallback ?? resized.jpegData(compressionQuality: qualitySteps.last ?? 0.5)
     }
 
     static func image(from data: Data?) -> UIImage? {

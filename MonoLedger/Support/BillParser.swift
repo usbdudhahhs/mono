@@ -132,7 +132,11 @@ enum BillParser {
         var out = ""
         out.reserveCapacity(text.count)
         for ch in text {
-            if ch == "\u{200B}" || ch == "\u{FEFF}" { continue }
+            // 不可见的格式字符一律丢掉：零宽空格、BOM、方向标记（RLM/LRM）、
+            // 双向隔离符、软连字符都属于这一类。
+            // 它们不占位置，却能把一个金额切成两段 ——「¥4‏5.00」会读成 4.00；
+            // 用户和 OCR 都看不见这个字符，错了也无从对账，只能提前清掉。
+            if ch.unicodeScalars.allSatisfy({ $0.properties.generalCategory == .format }) { continue }
             // 各种破折号统一成负号，微信的「-29.70」常被读成长横线
             if ch == "\u{2014}" || ch == "\u{2013}" || ch == "\u{2212}" { out.append("-"); continue }
             out.append(map[ch] ?? ch)

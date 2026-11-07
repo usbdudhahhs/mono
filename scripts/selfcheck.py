@@ -400,6 +400,40 @@ def main():
             fail(f"{swift_path} 里硬编码了版本号 {hit.group(1)}，"
                  f"应改为从 Bundle 读取")
 
+    # 11) 凭证图规格只允许一个来源
+    #     压到多大、压到多少 KB，散落在「记账时」「备份时」「批量压缩」三处时，
+    #     改一处忘两处就会出现「新存的图变小了、备份里还是老的」。
+    receipt_src = open("MonoLedger/Support/ReceiptStore.swift", encoding="utf-8").read()
+    if "static let maxDimension" not in receipt_src:
+        fail("ReceiptStore 缺少 maxDimension 常量，压缩尺寸又被写回各调用点了")
+    elif "maxDimension: CGFloat = ReceiptStore.maxDimension" not in receipt_src:
+        fail("ReceiptStore.compress 的默认参数没有引用 maxDimension 常量")
+    if "static let targetBytes" not in receipt_src:
+        fail("ReceiptStore 缺少 targetBytes 目标体积")
+    for path in ("MonoLedger/Support/ReceiptStore.swift", "MonoLedger/Support/BackupService.swift"):
+        # 只查代码行：注释里写「再往下 800 就发虚」是在解释取舍，不算写死
+        code_lines = [ln for ln in open(path, encoding="utf-8")
+                      if not ln.lstrip().startswith("//")]
+        for lineno, ln in enumerate(code_lines, 1):
+            if re.search(r"\b(1200|800)\b", ln):
+                fail(f"{path} 里还有写死的压缩尺寸：{ln.strip()[:60]}")
+
+    # 12) 不可见字符必须按 Unicode 类别统一清掉
+    #     只枚举 \u200b 和 \ufeff 会漏掉 RLM / 双向隔离符，
+    #     而它们能把「¥45.00」切成两段静默读成 4.00
+    parser_body = parser_src[parser_src.index("static func normalize("):]
+    parser_body = parser_body[:parser_body.index("var cleaned")]
+    if "generalCategory == .format" not in parser_body:
+        fail("BillParser.normalize 没有按 Unicode 类别丢弃不可见格式字符（RLM / 双向隔离符会切碎金额）")
+
+    # 13) 状态机测试不能被悄悄删掉
+    #     它是唯一覆盖「删除 → 回收站 → 恢复 → 备份合并」这条链的测试
+    tests_src = open("MonoLedgerTests/MonoLedgerCoreTests.swift", encoding="utf-8").read()
+    for symbol in ("LedgerStateMachineTests", "testRandomOperationSequenceKeepsInvariants",
+                   "testMergeIsIdempotent", "testMergeRevivesLocallyTrashedBill"):
+        if symbol not in tests_src:
+            fail(f"账本状态机测试缺少 {symbol}")
+
     # 结果
     print()
     if problems:

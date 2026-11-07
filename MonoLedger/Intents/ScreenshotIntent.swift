@@ -101,7 +101,7 @@ struct ScreenshotBookkeepingIntent: AppIntent {
         }
 
         let note = result.merchant.isEmpty ? categoryName : result.merchant
-        // 截图压到长边 1200 存档：放大能看清商户和金额，一张约 100KB
+        // 截图压到长边 1080 存档：放大能看清商户和金额，单张压在 140KB 以内
         let receipt = ReceiptStore.compress(uiImage)
         let reimbursement: ReimbursementState = (result.type == .expense && reimburse) ? .pending : .none
 

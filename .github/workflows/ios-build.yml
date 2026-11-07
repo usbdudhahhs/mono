@@ -26,6 +26,7 @@ jobs:
       #    selfcheck.py           工程引用 / 分类 ID 一致性
       #    static_compile_check.py 符号解析 / import 覆盖 / API 可用性
       #    amount_lab.py          金额链路：把 BillParser 的正则抽出来镜像执行
+      #    adversarial_lab.py     对抗性字符 / 极值 / 超长页 + 独立实现差分对拍
       - name: 工程自检
         run: |
           set -o pipefail
@@ -38,6 +39,7 @@ jobs:
             python3 scripts/selfcheck.py
             if [ -f scripts/static_compile_check.py ]; then python3 scripts/static_compile_check.py; fi
             if [ -f scripts/amount_lab.py ]; then python3 scripts/amount_lab.py; fi
+            if [ -f scripts/adversarial_lab.py ]; then python3 scripts/adversarial_lab.py; fi
           } 2>&1 | tee selfcheck.log
           echo "### 工程自检" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

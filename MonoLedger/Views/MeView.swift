@@ -139,7 +139,7 @@ struct MeView: View {
             Button("仅账目（体积最小）") { exportBackup(includeReceipts: false) }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("凭证图会压到长边 1200，一张截图约 100KB 上下。「仅账目」不含图片，几百 KB 就够。")
+            Text("凭证图按长边 1080 存，放大后商户和金额仍看得清，单张压在 140KB 以内。「仅账目」不含图片，几百 KB 就够。")
         }
         .fileImporter(isPresented: $showImporter,
                       allowedContentTypes: [.json],

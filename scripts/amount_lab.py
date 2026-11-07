@@ -18,6 +18,7 @@
 import os
 import re
 import sys
+import unicodedata
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC = os.path.join(ROOT, "MonoLedger", "Support", "BillParser.swift")
@@ -81,10 +82,20 @@ def pysub(pattern, template, text):
     return rx.sub(tpl, text)
 
 
+# Swift 侧把「不可见格式字符」按 Unicode 类别统一丢弃（generalCategory == .format），
+# 这里必须用同一套判定，否则镜像会漏掉 RLM / 双向隔离符这类字符
+if "generalCategory == .format" not in norm_body:
+    fail("normalize 的不可见字符清洗规则变了，镜像需要同步")
+
+
+def _is_format(ch):
+    return unicodedata.category(ch) == "Cf"
+
+
 def normalize(text):
     out = []
     for ch in text:
-        if ch in "\u200b\ufeff":
+        if _is_format(ch) or ch in "\u200b\ufeff":
             continue
         out.append("-" if ch in "\u2014\u2013\u2212" else ch)
     s = "".join(out).translate(TRANS).strip()

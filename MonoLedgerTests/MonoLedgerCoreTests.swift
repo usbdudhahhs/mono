@@ -254,3 +254,236 @@ final class MonoLedgerCoreTests: XCTestCase {
         XCTAssertEqual(result.amount, 20, accuracy: 0.001)
     }
 }
+
+// MARK: - 账本状态机测试
+//
+// 前面所有测试都只碰「纯字符串 → 金额」。账本真正的坑在状态迁移：
+// 删除 → 回收站 → 恢复 / 到期清理 / 备份 → 合并恢复。
+// 这些路径组合起来有十几种，手写用例覆盖不全，所以这里换两种跑法：
+//
+// 1) 定点：把最容易错的四条边界单独钉死（回收站到期、备份往返、合并幂等、复活）
+// 2) 随机：用确定性随机数跑 200 步操作，每步都验不变量
+//
+// 用的是真 SwiftData（内存库），不是替身；跑在模拟器上，和 App 同一套代码。
+
+@MainActor
+final class LedgerStateMachineTests: XCTestCase {
+
+    private func makeContext() throws -> ModelContext {
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Bill.self, configurations: config)
+        return ModelContext(container)
+    }
+
+    private func allBills(_ context: ModelContext) throws -> [Bill] {
+        try context.fetch(FetchDescriptor<Bill>())
+    }
+
+    private func activeBills(_ context: ModelContext) throws -> [Bill] {
+        try context.fetch(FetchDescriptor<Bill>(predicate: Bill.activeFilter))
+    }
+
+    private func makeBill(amount: Double, note: String,
+                          daysAgo: Int = 0,
+                          reimbursement: ReimbursementState = .none) -> Bill {
+        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
+        return Bill(type: .expense, amount: amount, categoryID: "home", note: note,
+                    date: date, reimbursement: reimbursement)
+    }
+
+    // MARK: 定点
+
+    /// 回收站到期清理的边界：31 天前删的走，29 天前删的留。
+    /// 差一天就会「昨天还在的账，今天打开没了」或者「清不干净」。
+    func testTrashPurgeKeepsRecentAndDropsExpired() throws {
+        let context = try makeContext()
+        let fresh = makeBill(amount: 100, note: "刚删的")
+        let old = makeBill(amount: 200, note: "删了一个多月")
+        context.insert(fresh)
+        context.insert(old)
+        fresh.deletedAt = Calendar.current.date(byAdding: .day, value: -29, to: Date())
+        old.deletedAt = Calendar.current.date(byAdding: .day, value: -31, to: Date())
+        try context.save()
+
+        Trash.purgeExpired(context)
+
+        let left = try allBills(context)
+        XCTAssertEqual(left.count, 1, "只应剩下 29 天前删的那条")
+        XCTAssertEqual(left.first?.note, "刚删的")
+    }
+
+    /// 回收站里的账不能出现在首页查询里，恢复后要回到原日期
+    func testTrashHidesFromActiveListAndRestoreKeepsDate() throws {
+        let context = try makeContext()
+        let bill = makeBill(amount: 88, note: "误删", daysAgo: 5)
+        context.insert(bill)
+        try context.save()
+
+        let originalDay = bill.date
+        XCTAssertNotNil(Trash.move(bill, in: context))
+        XCTAssertEqual(try activeBills(context).count, 0, "回收站里的不该出现在首页")
+
+        bill.deletedAt = nil
+        try context.save()
+        XCTAssertEqual(try activeBills(context).count, 1)
+        XCTAssertEqual(bill.date, originalDay, "恢复后日期不能被改成今天")
+    }
+
+    /// 备份 → 解码 → 恢复到空库：uuid、金额、报销状态、待核对标记全都要在
+    func testBackupRoundTripPreservesFields() throws {
+        let context = try makeContext()
+        let bills = [
+            makeBill(amount: 5600, note: "房贷", daysAgo: 30),
+            makeBill(amount: 32.5, note: "午饭", daysAgo: 1, reimbursement: .pending),
+            makeBill(amount: 199, note: "报销到账", daysAgo: 2, reimbursement: .done),
+        ]
+        for bill in bills { context.insert(bill) }
+        bills[1].needsReview = true
+        bills[1].reviewAlternativesRaw = "33.50,35.00"
+        try context.save()
+
+        let data = try BackupService.encode(bills.map { BillDTO(bill: $0, includeReceipt: false) })
+        let payload = try BackupService.decode(data)
+
+        let target = try makeContext()
+        let result = try BackupService.restore(payload, mode: .merge, in: target)
+        XCTAssertEqual(result.added, 3)
+
+        let restored = try allBills(target)
+        XCTAssertEqual(Set(restored.map(\.uuid)), Set(bills.map(\.uuid)), "uuid 必须原样保留")
+        let lunch = restored.first { $0.note == "午饭" }
+        XCTAssertEqual(lunch?.amount ?? 0, 32.5, accuracy: 0.001)
+        XCTAssertEqual(lunch?.reimbursement, .pending)
+        XCTAssertEqual(lunch?.needsReview, true, "待核对标记丢了，识别错的账就会悄悄混进去")
+        let done = restored.first { $0.note == "报销到账" }
+        XCTAssertEqual(done?.accountingAmount, 0, "已报销的净成本必须是 0")
+    }
+
+    /// 同一个备份连导两次，第二次必须一条都不加（否则用户重装一次账就翻倍）
+    func testMergeIsIdempotent() throws {
+        let context = try makeContext()
+        for i in 0..<5 {
+            context.insert(makeBill(amount: Double(i + 1), note: "账 \(i)", daysAgo: i))
+        }
+        try context.save()
+
+        let payload = try BackupService.decode(
+            try BackupService.encode(try allBills(context).map { BillDTO(bill: $0, includeReceipt: false) })
+        )
+
+        let first = try BackupService.restore(payload, mode: .merge, in: context)
+        let second = try BackupService.restore(payload, mode: .merge, in: context)
+        XCTAssertEqual(first.added, 0, "同一批数据不该重复进账")
+        XCTAssertEqual(second.added, 0)
+        XCTAssertEqual(try allBills(context).count, 5)
+    }
+
+    /// 本机删掉的账，从备份里恢复时要被「捞回来」，而不是新插一条
+    func testMergeRevivesLocallyTrashedBill() throws {
+        let context = try makeContext()
+        let bill = makeBill(amount: 66, note: "删了但备份里有")
+        context.insert(bill)
+        try context.save()
+        let uuid = bill.uuid
+
+        let payload = try BackupService.decode(
+            try BackupService.encode([BillDTO(bill: bill, includeReceipt: false)])
+        )
+        Trash.move(bill, in: context)
+        XCTAssertEqual(try activeBills(context).count, 0)
+
+        let result = try BackupService.restore(payload, mode: .merge, in: context)
+        XCTAssertEqual(result.reactivated, 1, "应该复活而不是新增")
+        XCTAssertEqual(result.added, 0)
+        XCTAssertEqual(try activeBills(context).count, 1)
+        XCTAssertEqual(try allBills(context).count, 1, "不能变成两条")
+        XCTAssertEqual(try allBills(context).first?.uuid, uuid)
+    }
+
+    // MARK: 随机状态机
+
+    /// 200 步随机操作，每步都验不变量。
+    /// 随机数固定种子：失败了能原样复现，不会变成「偶发」。
+    func testRandomOperationSequenceKeepsInvariants() throws {
+        struct LCG {
+            var state: UInt64
+            mutating func next(_ bound: Int) -> Int {
+                state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+                return Int((state >> 33) % UInt64(bound))
+            }
+        }
+        var rng = LCG(state: 20_261_108)
+
+        let context = try makeContext()
+        var counter = 0
+
+        func makeUniqueBill() -> Bill {
+            counter += 1
+            return makeBill(amount: Double(rng.next(10_000)) / 100 + 0.01,
+                            note: "随机账 \(counter)",
+                            daysAgo: rng.next(60),
+                            reimbursement: [.none, .pending, .done][rng.next(3)])
+        }
+
+        for step in 0..<200 {
+            let bills = try allBills(context)
+            switch rng.next(6) {
+            case 0, 1:                                  // 记账
+                context.insert(makeUniqueBill())
+                try context.save()
+
+            case 2:                                     // 删除（进回收站）
+                if !bills.isEmpty {
+                    let victim = bills[rng.next(bills.count)]
+                    victim.deletedAt = Calendar.current.date(
+                        byAdding: .day, value: -rng.next(40), to: Date())
+                    try context.save()
+                }
+
+            case 3:                                     // 恢复
+                if let victim = bills.first(where: { $0.deletedAt != nil }) {
+                    victim.deletedAt = nil
+                    try context.save()
+                }
+
+            case 4:                                     // 到期清理
+                Trash.purgeExpired(context)
+                // 清理只在跑的时候承诺「不留过期垃圾」，所以断言放在这里，
+                // 而不是每步都查 —— 否则会把「还没轮到清理」误判成 bug
+                let cutoffAtPurge = Calendar.current.date(
+                    byAdding: .day, value: -Trash.retentionDays - 1, to: Date()) ?? Date()
+                XCTAssertFalse(try allBills(context).contains {
+                    ($0.deletedAt ?? Date()) < cutoffAtPurge
+                }, "第 \(step) 步清理后仍留着超过保留期的账单")
+
+            default:                                    // 备份 → 合并恢复
+                if !bills.isEmpty {
+                    let payload = try BackupService.decode(
+                        try BackupService.encode(bills.map { BillDTO(bill: $0, includeReceipt: false) })
+                    )
+                    _ = try BackupService.restore(payload, mode: .merge, in: context)
+                }
+            }
+
+            // ---- 不变量 ----
+            let snapshot = try allBills(context)
+            let active = try activeBills(context)
+
+            XCTAssertEqual(snapshot.count,
+                           Set(snapshot.map(\.uuid)).count,
+                           "第 \(step) 步后出现重复 uuid，合并去重失效")
+            XCTAssertEqual(active.count,
+                           snapshot.filter { $0.deletedAt == nil }.count,
+                           "第 \(step) 步后首页条数与「非回收站条数」对不上")
+            for bill in snapshot {
+                XCTAssertTrue(bill.amount.isFinite, "第 \(step) 步后金额变成 NaN/Inf")
+                XCTAssertGreaterThanOrEqual(bill.amount, 0, "第 \(step) 步后出现负数金额")
+                XCTAssertGreaterThanOrEqual(bill.netCost, 0)
+                if bill.reimbursement == .done {
+                    XCTAssertEqual(bill.accountingAmount, 0,
+                                   "第 \(step) 步后已报销的仍在计入支出")
+                }
+            }
+        }
+    }
+}
