@@ -28,6 +28,9 @@ let seeds: [Seed] = [
     Seed(name: "两笔实付", text: "订单A\n实付 12.00\n订单B\n实付 18.00", amount: "12.00", expected: 12.00, type: .expense),
     Seed(name: "千分位空格", text: "账单\n合计 ¥1 234.56", amount: "1 234.56", expected: 1234.56, type: .expense),
     Seed(name: "O当零", text: "账单\n实付 ¥1O0.00", amount: "1O0.00", expected: 100.00, type: .expense),
+    // 连续两个 O：原实现里两条规则的前后视都要求 O 紧邻数字，一个都匹配不上，
+    // 整行识别失败。单独一个 O 的用例覆盖不到这种形态。
+    Seed(name: "连续O百元", text: "账单\n实付 ¥1OO.00", amount: "1OO.00", expected: 100.00, type: .expense),
     Seed(name: "零元订单", text: "兑换成功\n实付 ¥0.00\n积分抵扣", amount: "0.00", expected: 0.00, type: .expense),
     Seed(name: "无锚点多候选", text: "账单\n商品 120.00\n运费 120.50", amount: "120.00", expected: 120.00, type: .expense),
     Seed(name: "收款词干扰", text: "已转账 500.00 给张三\n对方已收款", amount: "500.00", expected: 500.00, type: .expense),
@@ -101,37 +104,10 @@ for s in seeds {
         let m = BillParser.parse(text: t)
         let good = abs(m.amount - base.amount) < 0.005 && m.type == base.type
         if !good {
-            // 失败时把两边的「喂进解析器的行」打出来：MR 不成立要么是行不一样，
-            // 要么是同样的行得出了不同结论，这两种原因的修法完全不同
-            func rows(_ x: String) -> [String] {
-                x.replacingOccurrences(of: "\r\n", with: "\n")
-                    .replacingOccurrences(of: "\r", with: "\n")
-                    .components(separatedBy: "\n")
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-            }
-            let a = rows(s.text), b = rows(t)
-            print("DBG \(s.name)/\(tag) base=\(base.amount) got=\(m.amount) 行数 \(a.count)→\(b.count) 行相同=\(a == b)")
-            // 用 debugDescription 打出来，\r 和 \t 才看得见
-            print("DBG   base行: \(a.map { String(reflecting: $0) })")
-            print("DBG   mut行 : \(b.map { String(reflecting: $0) })")
-            print("DBG   同串二次解析: \(BillParser.parse(text: t).amount)  基准二次: \(BillParser.parse(text: s.text).amount)")
-            print("DBG   行拼回解析: base=\(BillParser.parse(text: a.joined(separator: "\n")).amount) mut=\(BillParser.parse(text: b.joined(separator: "\n")).amount)")
-            print("DBG   t: 字符数=\(t.count) CR个数=\(t.unicodeScalars.filter { $0.value == 13 }.count) 换行个数=\(t.unicodeScalars.filter { $0.value == 10 }.count)")
-            // 直接用「行」构造 OCRLine 再解析，与 parse(text:) 的结果对照：
-            // 两者不一致，说明 parse(text:) 里给解析器的东西和我打印出来的行不是一回事
-            func build(_ arr: [String]) -> [OCRLine] {
-                arr.enumerated().map { i, v in
-                    OCRLine(text: v, confidence: 1, height: 0.02,
-                            box: CGRect(x: 0, y: max(0, 0.95 - CGFloat(i) * 0.04), width: 1, height: 0.02))
-                }
-            }
-            print("DBG   parse(lines:) 直接调用: base=\(BillParser.parse(lines: build(a)).amount) mut=\(BillParser.parse(lines: build(b)).amount)")
-            let viaText = BillParser.parse(text: t)
-            print("DBG   text路径 evidence: \(viaText.evidence) type=\(viaText.type.rawValue) tier=\(viaText.amountTier.rawValue)")
-            let viaLines = BillParser.parse(lines: build(b))
-            print("DBG   lines路径 evidence: \(viaLines.evidence) type=\(viaLines.type.rawValue) tier=\(viaLines.amountTier.rawValue)")
-            print("DBG   归一化: \(b.map { String(reflecting: BillParser.normalize($0)) })")
+            // 蜕变关系不成立时，先看 evidence：走了「单句」捷径的话，
+            // 证据里只有「金额 ¥x」，没有档位后缀、也没有商户。
+            // CRLF 文本曾因 contains("\n") 判假而整批走这条路，金额静默错掉。
+            print("DBG \(s.name)/\(tag) base=\(base.amount) got=\(m.amount) 证据=\(m.evidence)")
         }
         ok(good, "MR \(s.name)/\(tag) 得 \(m.amount)")
     }
