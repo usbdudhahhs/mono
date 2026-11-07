@@ -147,14 +147,21 @@ jobs:
         continue-on-error: true
         timeout-minutes: 20
         run: |
+          # 没有 pipefail 时，`run.sh | tee` 的退出码是 tee 的，恒为 0——
+          # 回归脚本编译失败也会被记成绿色通过（实际发生过）。
+          set -o pipefail
           if [ ! -d scripts/parser_lab ]; then
             echo "## ⚠️ 没有 scripts/parser_lab，跳过解析器回归" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
-          bash scripts/parser_lab/run.sh 2>&1 | tee parser-lab.log
-          echo "## 解析器回归" >> "$GITHUB_STEP_SUMMARY"
+          if bash scripts/parser_lab/run.sh 2>&1 | tee parser-lab.log; then
+            echo "## ✅ 解析器回归通过" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::解析器回归没跑完（编译失败或有用例不通过），详情见日志"
+            echo "## ❌ 解析器回归失败（不代表 ipa 不可用，但三套用例的结论不能当真）" >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -n 30 parser-lab.log >> "$GITHUB_STEP_SUMMARY"
+          tail -n 40 parser-lab.log >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: 上传编译日志

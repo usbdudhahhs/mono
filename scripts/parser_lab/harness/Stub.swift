@@ -1,4 +1,9 @@
 import Foundation
+// CGRect 的类型本身由 Foundation 带出来（CoreFoundation），但 midY / width 这些成员
+// 是 CoreGraphics overlay 里的 extension。只 import Foundation 时，类型认得、成员不认，
+// 编译会报 “value of type 'CGRect' has no member 'midY'”。
+// App 里因为有 import UIKit 顺带引入了 CoreGraphics，所以这个问题只在脚手架暴露。
+import CoreGraphics
 
 enum RecordType: String { case expense, income
     var sign: String { self == .expense ? "-" : "+" }

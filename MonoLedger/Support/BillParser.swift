@@ -12,6 +12,10 @@
 
 import UIKit
 import Foundation
+// 显式声明：本文件直接用 CGRect 的 midY / height 这些成员，它们来自 CoreGraphics
+// overlay。App 编译时 UIKit 顺带引入了，但 parser_lab 生成的副本会剥掉 UIKit，
+// 只剩 Foundation 时这些成员就不存在了（脚本里踩过：CGRect has no member 'midY'）。
+import CoreGraphics
 
 // MARK: - 解析结果
 
